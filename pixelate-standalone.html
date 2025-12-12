@@ -175,6 +175,7 @@
             align-items: center;
             justify-content: center;
             min-height: 300px;
+            position: relative;
         }
 
         .image-holder {
@@ -195,8 +196,8 @@
         canvas#outputCanvas {
             border: 2px solid #ddd;
             border-radius: 6px;
-            max-width: 100%;
-            max-height: 640px;
+            width: 512px;
+            height: 512px;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
         }
@@ -258,26 +259,15 @@
             flex: 1;
         }
 
-        .info-box {
-            background: #e3f2fd;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            border-radius: 4px;
-            color: #1565c0;
-            font-size: 0.95em;
-            line-height: 1.5;
-        }
+        /* notification styles removed */
 
-        .error {
-            background: #ffebee;
-            border-left: 4px solid #c62828;
-            color: #b71c1c;
-        }
-
-        .success {
-            background: #e8f5e9;
-            border-left: 4px solid #2e7d32;
-            color: #1b5e20;
+        .version-footer {
+            position: fixed;
+            bottom: 10px;
+            right: 15px;
+            font-size: 0.8em;
+            color: #999;
+            z-index: 1000;
         }
 
         @media (max-width: 768px) {
@@ -329,6 +319,87 @@
             color: #333;
             margin-bottom: 4px;
         }
+
+        .crop-overlay {
+            position: absolute;
+            border: 2px dashed #667eea;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+            cursor: move;
+            display: none;
+            z-index: 10;
+        }
+
+        .crop-overlay.active {
+            display: block;
+        }
+
+        .crop-resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #667eea;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: nwse-resize;
+            display: none;
+            z-index: 11;
+        }
+
+        .crop-overlay.active .crop-resize-handle {
+            display: block;
+        }
+
+        .crop-resize-handle.se {
+            bottom: -8px;
+            right: -8px;
+        }
+
+        .crop-mode-active {
+            display: flex !important;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .crop-controls {
+            display: none;
+            background: #f9f9f9;
+            border-radius: 6px;
+            padding: 15px;
+            border: 2px solid #667eea;
+        }
+
+        .crop-controls.active {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .crop-dimension-input {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .crop-dimension-input label {
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .crop-dimension-input input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .crop-button-group {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 10px;
+        }
+
+        .crop-button-group button {
+            flex: 1;
+        }
     </style>
 </head>
 <body>
@@ -349,7 +420,7 @@
                 </div>
 
                 <div class="control-group">
-                    <label>Palette</label>
+                    <label>Color Palette</label>
                     <div class="palette-grid" id="paletteGrid"></div>
                 </div>
 
@@ -373,31 +444,55 @@
                 </div>
 
                 <div class="control-group">
-                    <label>Effects</label>
-                    <div class="button-group">
-                        <button class="btn-secondary" id="grayscaleBtn">Grayscale</button>
-                        <button class="btn-secondary" id="paletteBtn">Apply Palette</button>
+                    <label>Cropping</label>
+                    <button class="btn-secondary" id="cropToggleBtn" disabled>Enable Crop Tool</button>
+                    <div class="crop-controls" id="cropControls">
+                        <div class="crop-dimension-input">
+                            <label for="cropSize">Square Size (px)</label>
+                            <input type="number" id="cropSize" min="10" value="256">
+                        </div>
+                        <div class="crop-dimension-input">
+                            <label for="cropX">X Position</label>
+                            <input type="number" id="cropX" min="0" value="0">
+                        </div>
+                        <div class="crop-dimension-input">
+                            <label for="cropY">Y Position</label>
+                            <input type="number" id="cropY" min="0" value="0">
+                        </div>
+                        <div class="crop-dimension-input">
+                            <label for="cropReset">Actions</label>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="btn-secondary" id="cropApplyBtn" style="flex: 1; padding: 8px;">Apply</button>
+                                <button class="btn-danger" id="cropCancelBtn" style="flex: 1; padding: 8px;">Cancel</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+
 
                 <div class="control-group">
                     <label>Actions</label>
                     <div class="button-group">
-                        <button class="btn-primary" id="pixelateBtn" disabled>Pixelate</button>
                         <button class="btn-primary" id="downloadBtn" disabled>Download</button>
+                        <button class="btn-secondary" id="undoBtn" disabled>Undo</button>
+                        <button class="btn-secondary" id="revertBtn" disabled>Revert</button>
                         <button class="btn-danger" id="resetBtn">Reset</button>
                     </div>
                 </div>
 
-                <div id="message" class="info-box" style="display: none;"></div>
+                <!-- notifications removed -->
             </div>
 
             <!-- Right Panel: Preview -->
             <div class="section">
                 <h2>Preview</h2>
-                <div class="preview-container">
+                <div class="preview-container" id="previewContainer">
                     <img id="sourceImage" alt="Source Image">
                     <canvas id="outputCanvas"></canvas>
+                    <div class="crop-overlay" id="cropOverlay">
+                        <div class="crop-resize-handle se"></div>
+                    </div>
                     <div class="placeholder" id="placeholder">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -419,6 +514,8 @@
             </div>
         </div>
     </div>
+
+    <div class="version-footer">v1.1</div>
 
     <!-- Pixelator API Script -->
     <script>
@@ -450,6 +547,7 @@
          "GameBoy": [[15,56,15],[48,98,48],[139,172,15],[155,188,15]],
          "C64": [[0,0,0],[255,255,255],[104,55,43],[112,164,178],[111,61,134],[88,141,67],[53,40,121],[184,199,111],[111,79,37],[67,57,0],[154,103,89],[68,68,68],[108,108,108],[154,154,154],[190,190,190],[255,255,255]],
          "PICO-8": [[0,0,0],[29,43,83],[126,37,83],[0,135,81],[171,82,54],[95,87,79],[194,195,199],[255,241,232],[255,0,77],[255,163,0],[255,236,39],[0,228,54],[41,173,255],[131,118,156],[255,119,168],[255,204,170]],
+         "SNES": [[0,0,0],[34,34,136],[68,68,255],[0,102,153],[0,136,85],[0,170,51],[85,170,0],[170,170,51],[170,136,0],[170,68,0],[170,34,34],[170,68,85],[170,102,170],[136,102,136],[255,255,255],[204,204,204]],
          "Web Safe": (function(){
          const vals=[0,51,102,153,204,255], out=[]; for(const r of vals){ for(const g of vals){ for(const b of vals){ out.push([r,g,b]); } } } return out;
          })()
@@ -603,36 +701,63 @@
             imageUpload: document.getElementById('imageUpload'),
             sourceImage: document.getElementById('sourceImage'),
             outputCanvas: document.getElementById('outputCanvas'),
-            pixelateBtn: document.getElementById('pixelateBtn'),
             downloadBtn: document.getElementById('downloadBtn'),
             resetBtn: document.getElementById('resetBtn'),
-            grayscaleBtn: document.getElementById('grayscaleBtn'),
-            paletteBtn: document.getElementById('paletteBtn'),
+
             pixelScale: document.getElementById('pixelScale'),
             scaleValue: document.getElementById('scaleValue'),
             outputResolution: document.getElementById('outputResolution'),
-            message: document.getElementById('message'),
             placeholder: document.getElementById('placeholder'),
             paletteGrid: document.getElementById('paletteGrid'),
             infoGrid: document.getElementById('infoGrid'),
             imageDims: document.getElementById('imageDims'),
-            paletteInfo: document.getElementById('paletteInfo')
+            paletteInfo: document.getElementById('paletteInfo'),
+            previewContainer: document.getElementById('previewContainer'),
+            cropToggleBtn: document.getElementById('cropToggleBtn'),
+            cropControls: document.getElementById('cropControls'),
+            cropOverlay: document.getElementById('cropOverlay'),
+            cropSize: document.getElementById('cropSize'),
+            cropX: document.getElementById('cropX'),
+            cropY: document.getElementById('cropY'),
+            cropApplyBtn: document.getElementById('cropApplyBtn'),
+            cropCancelBtn: document.getElementById('cropCancelBtn')
+            ,undoBtn: document.getElementById('undoBtn')
+            ,revertBtn: document.getElementById('revertBtn')
         };
 
         let pixelator = null;
-        let currentPalette = 'PICO-8';
+        let currentPalette = 'Image Default';
+        let cropMode = false;
+        let isCropped = false;
+        let croppedImageData = null;
+        let history = [];
+        let currentImageData = null;
+        let backupBeforeCrop = null;
+        let cropState = {
+            size: 256,
+            x: 0,
+            y: 0,
+            isDragging: false,
+            isResizing: false,
+            dragStartX: 0,
+            dragStartY: 0,
+            originalCropX: 0,
+            originalCropY: 0
+        };
+        let originalImageData = null;
 
-        function showMessage(text, type = 'info') {
-            elements.message.textContent = text;
-            elements.message.className = `info-box ${type}`;
-            elements.message.style.display = 'block';
-            setTimeout(() => {
-                elements.message.style.display = 'none';
-            }, 4000);
-        }
+        // notifications removed
 
         function initPaletteGrid() {
             elements.paletteGrid.innerHTML = '';
+            
+            // Add 'Image Default' option first (no color preview)
+            const defaultBtn = document.createElement('div');
+            defaultBtn.className = `palette-option ${currentPalette === 'Image Default' ? 'active' : ''}`;
+            defaultBtn.textContent = 'Image Default';
+            defaultBtn.addEventListener('click', () => selectPalette('Image Default'));
+            elements.paletteGrid.appendChild(defaultBtn);
+            
             Object.keys(Pixelator.Common.Palettes).forEach(name => {
                 const palette = Pixelator.Common.Palettes[name];
                 const btn = document.createElement('div');
@@ -658,15 +783,353 @@
 
         function selectPalette(name) {
             currentPalette = name;
-            if (pixelator) {
-                pixelator.setpalette(Pixelator.Common.Palettes[name]);
-                elements.paletteInfo.textContent = name;
-            }
             document.querySelectorAll('.palette-option').forEach(el => {
                 el.classList.toggle('active', el.textContent === name);
             });
-            showMessage(`Palette changed to ${name}`, 'success');
+            
+            // Auto-apply palette effect when selected
+            if (!pixelator) return;
+            
+            try {
+                if (!currentImageData) return;
+                
+                if (name === 'Image Default') {
+                    // For Image Default, just update the label without applying palette effect
+                    elements.paletteInfo.textContent = 'Image Default';
+                } else {
+                    // Apply palette effect
+                    pushHistory();
+                    const img = new Image();
+                    img.onload = () => {
+                        elements.outputCanvas.width = img.width;
+                        elements.outputCanvas.height = img.height;
+                        const ctx = elements.outputCanvas.getContext('2d');
+                        ctx.imageSmoothingEnabled = false;
+                        ctx.clearRect(0,0,elements.outputCanvas.width,elements.outputCanvas.height);
+                        ctx.drawImage(img, 0, 0);
+                        pixelator.setDrawTo(elements.outputCanvas);
+                        pixelator.setpalette(Pixelator.Common.Palettes[name]);
+                        pixelator.convertpalette();
+                        currentImageData = elements.outputCanvas.toDataURL();
+                        isCropped = currentImageData !== originalImageData;
+                        croppedImageData = isCropped ? currentImageData : null;
+                        elements.paletteInfo.textContent = name;
+                        elements.undoBtn.disabled = history.length === 0;
+                        elements.revertBtn.disabled = (currentImageData === originalImageData);
+                    };
+                    img.src = currentImageData;
+                }
+            } catch (error) {
+                console.error(error);
+            }
         }
+
+        // History and state helpers
+        function pushHistory() {
+            if (!currentImageData) return;
+            history.push(currentImageData);
+            if (history.length > 30) history.shift();
+            elements.undoBtn.disabled = history.length === 0;
+            elements.revertBtn.disabled = (currentImageData === originalImageData);
+        }
+
+        function restoreFromDataURL(dataURL, updateCurrent = true) {
+            if (!dataURL) return;
+            const img = new Image();
+            img.onload = () => {
+                elements.outputCanvas.width = img.width;
+                elements.outputCanvas.height = img.height;
+                const ctx = elements.outputCanvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.clearRect(0,0,elements.outputCanvas.width, elements.outputCanvas.height);
+                ctx.drawImage(img, 0, 0);
+                if (updateCurrent) {
+                    currentImageData = elements.outputCanvas.toDataURL();
+                    isCropped = currentImageData !== originalImageData;
+                    croppedImageData = isCropped ? currentImageData : null;
+                }
+                elements.imageDims.textContent = `${elements.outputCanvas.width}×${elements.outputCanvas.height}px`;
+                elements.undoBtn.disabled = history.length === 0;
+                elements.revertBtn.disabled = (currentImageData === originalImageData);
+            };
+            img.src = dataURL;
+        }
+
+        function undoLast() {
+            if (!history.length) return;
+            const prev = history.pop();
+            restoreFromDataURL(prev, true);
+            elements.undoBtn.disabled = history.length === 0;
+            elements.revertBtn.disabled = (currentImageData === originalImageData);
+            // notification removed
+        }
+
+        function revertOriginal() {
+            if (!originalImageData) return;
+            history = [];
+            restoreFromDataURL(originalImageData, true);
+            elements.undoBtn.disabled = true;
+            elements.revertBtn.disabled = true;
+            // notification removed
+        }
+
+        function updateCropOverlay() {
+            const overlay = elements.cropOverlay;
+            const canvas = elements.outputCanvas;
+            const container = elements.previewContainer;
+
+            // Get the displayed size of the canvas (affected by CSS)
+            const displayedWidth = canvas.offsetWidth;
+            const displayedHeight = canvas.offsetHeight;
+            
+            // Get actual canvas dimensions
+            const actualWidth = canvas.width;
+            const actualHeight = canvas.height;
+            
+            // Calculate scale factor
+            const scaleX = displayedWidth / actualWidth;
+            const scaleY = displayedHeight / actualHeight;
+
+            // Calculate canvas position relative to container
+            const canvasLeft = canvas.offsetLeft;
+            const canvasTop = canvas.offsetTop;
+
+            // Position the overlay over the crop area
+            overlay.style.left = (canvasLeft + cropState.x * scaleX) + 'px';
+            overlay.style.top = (canvasTop + cropState.y * scaleY) + 'px';
+            overlay.style.width = (cropState.size * scaleX) + 'px';
+            overlay.style.height = (cropState.size * scaleY) + 'px';
+        }
+
+        function enableCropMode() {
+            if (!pixelator) return;
+
+            cropMode = true;
+            // keep a backup of the current working image so cancel can restore
+            backupBeforeCrop = currentImageData || elements.outputCanvas.toDataURL();
+
+            // Set initial crop size to fit within image
+            const maxSize = Math.min(
+                elements.outputCanvas.width,
+                elements.outputCanvas.height
+            );
+            cropState.size = Math.min(256, maxSize);
+            cropState.x = (elements.outputCanvas.width - cropState.size) / 2;
+            cropState.y = (elements.outputCanvas.height - cropState.size) / 2;
+
+            elements.cropSize.value = cropState.size;
+            elements.cropX.value = cropState.x;
+            elements.cropY.value = cropState.y;
+
+            elements.cropToggleBtn.textContent = 'Disable Crop Tool';
+            elements.cropToggleBtn.classList.add('active');
+            elements.cropControls.classList.add('active');
+            elements.cropOverlay.classList.add('active');
+
+            updateCropOverlay();
+            // notification removed
+        }
+
+        function disableCropMode(restoreOriginal = true) {
+            cropMode = false;
+            elements.cropToggleBtn.textContent = 'Enable Crop Tool';
+            elements.cropToggleBtn.classList.remove('active');
+            elements.cropControls.classList.remove('active');
+            elements.cropOverlay.classList.remove('active');
+            
+            // Restore original image only if canceling (not applying crop)
+            // Restore backup (pre-crop) only if canceling (not applying crop)
+            if (restoreOriginal && backupBeforeCrop) {
+                restoreFromDataURL(backupBeforeCrop, true);
+            }
+            backupBeforeCrop = null;
+            
+            cropState.isDragging = false;
+            cropState.isResizing = false;
+        }
+
+        function applyCrop() {
+            if (!pixelator) return;
+
+            if (!currentImageData) return;
+            pushHistory();
+
+            // Clamp values based on current canvas size
+            const maxX = Math.max(0, elements.outputCanvas.width - cropState.size);
+            const maxY = Math.max(0, elements.outputCanvas.height - cropState.size);
+            cropState.x = Math.max(0, Math.min(cropState.x, maxX));
+            cropState.y = Math.max(0, Math.min(cropState.y, maxY));
+            cropState.size = Math.max(10, Math.min(
+                cropState.size,
+                Math.min(
+                    elements.outputCanvas.width - cropState.x,
+                    elements.outputCanvas.height - cropState.y
+                )
+            ));
+
+            // Load current image into an offscreen canvas and crop from it
+            const srcImg = new Image();
+            srcImg.onload = () => {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = cropState.size;
+                tempCanvas.height = cropState.size;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.imageSmoothingEnabled = false;
+                // Calculate scale between displayed canvas and source image if necessary
+                // Draw the source image at its intrinsic size, then crop region
+                // If the source image dimensions differ from outputCanvas, assume coords are based on outputCanvas
+                tempCtx.drawImage(
+                    srcImg,
+                    cropState.x, cropState.y,
+                    cropState.size, cropState.size,
+                    0, 0,
+                    cropState.size, cropState.size
+                );
+
+                // Update output canvas with cropped image
+                elements.outputCanvas.width = cropState.size;
+                elements.outputCanvas.height = cropState.size;
+                const ctx = elements.outputCanvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.clearRect(0,0,elements.outputCanvas.width,elements.outputCanvas.height);
+                ctx.drawImage(tempCanvas, 0, 0);
+
+                // Store the cropped image data for future operations
+                isCropped = true;
+                currentImageData = elements.outputCanvas.toDataURL();
+                croppedImageData = currentImageData;
+                elements.imageDims.textContent = `${cropState.size}×${cropState.size}px`;
+
+                // Disable crop mode without restoring original
+                disableCropMode(false);
+                elements.undoBtn.disabled = history.length === 0;
+                elements.revertBtn.disabled = (currentImageData === originalImageData);
+                // notification removed
+            };
+            srcImg.src = currentImageData;
+        }
+
+        // Crop overlay event handlers
+        elements.cropOverlay.addEventListener('mousedown', (e) => {
+            if (!cropMode) return;
+
+            const handle = e.target.closest('.crop-resize-handle');
+            if (handle) {
+                cropState.isResizing = true;
+                cropState.dragStartX = e.clientX;
+                cropState.dragStartY = e.clientY;
+            } else {
+                cropState.isDragging = true;
+                cropState.dragStartX = e.clientX;
+                cropState.dragStartY = e.clientY;
+                cropState.originalCropX = cropState.x;
+                cropState.originalCropY = cropState.y;
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!cropMode) return;
+
+            const canvas = elements.outputCanvas;
+            const displayedWidth = canvas.offsetWidth;
+            const displayedHeight = canvas.offsetHeight;
+            const scaleX = canvas.width / displayedWidth;
+            const scaleY = canvas.height / displayedHeight;
+
+            if (cropState.isDragging) {
+                const deltaX = (e.clientX - cropState.dragStartX) * scaleX;
+                const deltaY = (e.clientY - cropState.dragStartY) * scaleY;
+
+                const maxX = Math.max(0, canvas.width - cropState.size);
+                const maxY = Math.max(0, canvas.height - cropState.size);
+
+                cropState.x = Math.max(0, Math.min(cropState.originalCropX + deltaX, maxX));
+                cropState.y = Math.max(0, Math.min(cropState.originalCropY + deltaY, maxY));
+
+                elements.cropX.value = Math.round(cropState.x);
+                elements.cropY.value = Math.round(cropState.y);
+
+                updateCropOverlay();
+            } else if (cropState.isResizing) {
+                const deltaX = (e.clientX - cropState.dragStartX) * scaleX;
+                const deltaY = (e.clientY - cropState.dragStartY) * scaleY;
+
+                const newSize = Math.max(
+                    10,
+                    Math.min(
+                        cropState.size + Math.max(deltaX, deltaY),
+                        Math.min(
+                            canvas.width - cropState.x,
+                            canvas.height - cropState.y
+                        )
+                    )
+                );
+
+                cropState.size = newSize;
+                elements.cropSize.value = Math.round(cropState.size);
+
+                updateCropOverlay();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            cropState.isDragging = false;
+            cropState.isResizing = false;
+        });
+
+        // Crop controls event handlers
+        elements.cropToggleBtn.addEventListener('click', () => {
+            if (cropMode) {
+                disableCropMode();
+            } else {
+                enableCropMode();
+            }
+        });
+
+        elements.cropSize.addEventListener('change', (e) => {
+            cropState.size = Math.max(10, parseInt(e.target.value) || 256);
+            const maxSize = Math.min(
+                elements.outputCanvas.width - cropState.x,
+                elements.outputCanvas.height - cropState.y
+            );
+            cropState.size = Math.min(cropState.size, maxSize);
+            elements.cropSize.value = cropState.size;
+            updateCropOverlay();
+        });
+
+        elements.cropX.addEventListener('change', (e) => {
+            cropState.x = Math.max(0, parseInt(e.target.value) || 0);
+            const maxX = Math.max(0, elements.outputCanvas.width - cropState.size);
+            cropState.x = Math.min(cropState.x, maxX);
+            elements.cropX.value = cropState.x;
+            updateCropOverlay();
+        });
+
+        elements.cropY.addEventListener('change', (e) => {
+            cropState.y = Math.max(0, parseInt(e.target.value) || 0);
+            const maxY = Math.max(0, elements.outputCanvas.height - cropState.size);
+            cropState.y = Math.min(cropState.y, maxY);
+            elements.cropY.value = cropState.y;
+            updateCropOverlay();
+        });
+
+        elements.cropApplyBtn.addEventListener('click', () => {
+            applyCrop();
+        });
+
+        elements.cropCancelBtn.addEventListener('click', () => {
+            disableCropMode(true);
+            // notification removed
+        });
+
+        // Undo/Revert handlers
+        elements.undoBtn.addEventListener('click', () => {
+            undoLast();
+        });
+
+        elements.revertBtn.addEventListener('click', () => {
+            revertOriginal();
+        });
 
         elements.imageUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
@@ -674,28 +1137,44 @@
 
             const reader = new FileReader();
             reader.onload = (event) => {
-                elements.sourceImage.src = event.target.result;
-                elements.sourceImage.onload = () => {
-                    const naturalWidth = elements.sourceImage.naturalWidth;
-                    const naturalHeight = elements.sourceImage.naturalHeight;
+                // Store original image data and initialize working state
+                originalImageData = event.target.result;
+                currentImageData = originalImageData;
+                history = [];
 
-                    elements.outputCanvas.width = naturalWidth;
-                    elements.outputCanvas.height = naturalHeight;
+                // Draw initial image into canvas
+                const img = new Image();
+                img.onload = () => {
+                    elements.outputCanvas.width = img.naturalWidth;
+                    elements.outputCanvas.height = img.naturalHeight;
+                    const ctx = elements.outputCanvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.clearRect(0,0,elements.outputCanvas.width, elements.outputCanvas.height);
+                    ctx.drawImage(img, 0, 0);
 
-                    pixelator = new Pixelator(elements.sourceImage, elements.outputCanvas);
+                    // Initialize Pixelator to reference the visible canvas
+                    pixelator = new Pixelator(null, elements.outputCanvas);
                     pixelator.setpalette(Pixelator.Common.Palettes[currentPalette]);
                     pixelator.setScale(parseInt(elements.pixelScale.value));
-                    pixelator.draw();
 
                     elements.placeholder.style.display = 'none';
                     elements.outputCanvas.style.display = 'block';
-                    elements.pixelateBtn.disabled = false;
                     elements.downloadBtn.disabled = false;
+                    elements.cropToggleBtn.disabled = false;
+                    elements.undoBtn.disabled = true;
+                    elements.revertBtn.disabled = true;
                     elements.infoGrid.style.display = 'grid';
-                    elements.imageDims.textContent = `${naturalWidth}×${naturalHeight}px`;
-
-                    showMessage('Image loaded successfully', 'success');
+                    elements.imageDims.textContent = `${img.naturalWidth}×${img.naturalHeight}px`;
+                    
+                    // Set palette to Image Default when image loads
+                    currentPalette = 'Image Default';
+                    document.querySelectorAll('.palette-option').forEach(el => {
+                        el.classList.toggle('active', el.textContent === 'Image Default');
+                    });
+                    elements.paletteInfo.textContent = 'Image Default';
+                    // notification removed
                 };
+                img.src = event.target.result;
             };
             reader.readAsDataURL(file);
         });
@@ -704,8 +1183,26 @@
             const value = e.target.value;
             elements.scaleValue.textContent = value;
             if (pixelator) {
-                pixelator.setScale(parseInt(value));
-                pixelator.draw();
+                if (!currentImageData) return;
+                pushHistory();
+                const img = new Image();
+                img.onload = () => {
+                    elements.outputCanvas.width = img.width;
+                    elements.outputCanvas.height = img.height;
+                    const ctx = elements.outputCanvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.clearRect(0,0,elements.outputCanvas.width,elements.outputCanvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    pixelator.setDrawTo(elements.outputCanvas);
+                    pixelator.setScale(parseInt(value));
+                    pixelator.pixelate();
+                    currentImageData = elements.outputCanvas.toDataURL();
+                    isCropped = currentImageData !== originalImageData;
+                    croppedImageData = isCropped ? currentImageData : null;
+                    elements.undoBtn.disabled = history.length === 0;
+                    elements.revertBtn.disabled = (currentImageData === originalImageData);
+                };
+                img.src = currentImageData;
             }
         });
 
@@ -715,67 +1212,52 @@
             const value = e.target.value;
             if (value) {
                 const [width, height] = value.split('x').map(Number);
-                elements.outputCanvas.width = width;
-                elements.outputCanvas.height = height;
-                // Set CSS dimensions for 640x640 preview display
-                elements.outputCanvas.style.width = '640px';
-                elements.outputCanvas.style.height = '640px';
-                pixelator.setDrawTo(elements.outputCanvas);
-                pixelator.draw();
-                elements.imageDims.textContent = `${width}×${height}px`;
-                showMessage(`Resolution changed to ${width}×${height}px`, 'success');
-            }
-        });
-
-        elements.pixelateBtn.addEventListener('click', () => {
-            if (!pixelator) return;
-
-            try {
-                pixelator.pixelate();
-                showMessage('Image pixelated successfully!', 'success');
-            } catch (error) {
-                showMessage(`Error: ${error.message}`, 'error');
-            }
-        });
-
-        elements.grayscaleBtn.addEventListener('click', () => {
-            if (!pixelator) return;
-
-            try {
-                pixelator.draw();
-                pixelator.convertGrayscale();
-                showMessage('Grayscale effect applied!', 'success');
-            } catch (error) {
-                showMessage(`Error: ${error.message}`, 'error');
-            }
-        });
-
-        elements.paletteBtn.addEventListener('click', () => {
-            if (!pixelator) return;
-
-            try {
-                pixelator.draw();
-                pixelator.convertpalette();
-                showMessage(`${currentPalette} palette applied!`, 'success');
-            } catch (error) {
-                showMessage(`Error: ${error.message}`, 'error');
+                
+                if (!currentImageData) return;
+                pushHistory();
+                const img = new Image();
+                img.onload = () => {
+                    elements.outputCanvas.width = width;
+                    elements.outputCanvas.height = height;
+                    const ctx = elements.outputCanvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.clearRect(0,0,width,height);
+                    ctx.drawImage(img, 0, 0, width, height);
+                    currentImageData = elements.outputCanvas.toDataURL();
+                    isCropped = currentImageData !== originalImageData;
+                    croppedImageData = isCropped ? currentImageData : null;
+                    elements.imageDims.textContent = `${width}×${height}px`;
+                    elements.undoBtn.disabled = history.length === 0;
+                    elements.revertBtn.disabled = (currentImageData === originalImageData);
+                    // notification removed
+                };
+                img.src = currentImageData;
             }
         });
 
         elements.downloadBtn.addEventListener('click', () => {
             if (!pixelator) return;
 
-            try {
-                pixelator.saveImage();
-                showMessage('Image downloaded!', 'success');
-            } catch (error) {
-                showMessage(`Error: ${error.message}`, 'error');
-            }
+                try {
+                    pixelator.saveImage();
+                    // notification removed
+                } catch (error) {
+                    console.error(error);
+                }
         });
 
         elements.resetBtn.addEventListener('click', () => {
             // Clear image upload
             elements.imageUpload.value = '';
+            
+            // Disable crop mode
+            if (cropMode) {
+                disableCropMode();
+            }
+            
+            // Reset crop state
+            isCropped = false;
+            croppedImageData = null;
             
             // Reset all controls to defaults
             elements.pixelScale.value = '1';
@@ -783,10 +1265,11 @@
             elements.outputResolution.value = '';
             
             // Reset palette
-            currentPalette = 'PICO-8';
+            currentPalette = 'Image Default';
             document.querySelectorAll('.palette-option').forEach(el => {
-                el.classList.toggle('active', el.textContent === 'PICO-8');
+                el.classList.toggle('active', el.textContent === 'Image Default');
             });
+            elements.paletteInfo.textContent = 'Image Default';
             
             // Reset UI state
             elements.sourceImage.style.display = 'none';
@@ -797,13 +1280,19 @@
             elements.infoGrid.style.display = 'none';
             
             // Disable action buttons
-            elements.pixelateBtn.disabled = true;
             elements.downloadBtn.disabled = true;
+            elements.cropToggleBtn.disabled = true;
+            elements.undoBtn.disabled = true;
+            elements.revertBtn.disabled = true;
             
             // Clear pixelator
             pixelator = null;
-            
-            showMessage('All options reset to defaults', 'success');
+            history = [];
+            currentImageData = null;
+            originalImageData = null;
+            isCropped = false;
+            croppedImageData = null;
+            // notification removed
         });
 
         // Initialize palette grid on page load
