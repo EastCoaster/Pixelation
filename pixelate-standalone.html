@@ -517,7 +517,7 @@
 
     <div class="version-footer">v1.1</div>
 
-    <!-- Pixelator API Script -->
+    <!-- Pixelation API Script -->
     <script>
         /* Pixelation API - client-side JavaScript */
         (function(global){
@@ -555,7 +555,7 @@
 
          const COMMON_RESOLUTIONS = [ [128,128],[64,64],[32,32],[16,16] ];
 
-         function Pixelator(fromImg, toCanvas){
+         function Pixelation(fromImg, toCanvas){
          this.fromImg = fromImg || null;
          this.toCanvas = toCanvas || null;
          this.ctx = (this.toCanvas ? this.toCanvas.getContext('2d') : null);
@@ -567,7 +567,7 @@
          }
 
          // Draw the source image scaled to the CURRENT canvas size
-         Pixelator.prototype.draw = function(){
+         Pixelation.prototype.draw = function(){
          if(!this.fromImg || !this.toCanvas) return this;
          const srcW = this.fromImg.naturalWidth || this.fromImg.width;
          const srcH = this.fromImg.naturalHeight || this.fromImg.height;
@@ -581,26 +581,26 @@
          return this;
          };
 
-         Pixelator.prototype.hideFromImg = function(){
+         Pixelation.prototype.hideFromImg = function(){
          if(this.fromImg){ this.fromImg.style.display = 'none'; }
          return this;
          };
 
-         Pixelator.prototype.setDrawFrom = function(elem){ this.fromImg = elem; return this; };
-         Pixelator.prototype.setDrawTo = function(elem){ this.toCanvas = elem; this.ctx = elem.getContext('2d'); return this; };
-         Pixelator.prototype.setFromImgSource = function(src){ if(this.fromImg){ this.fromImg.src = src; } return this; };
-         Pixelator.prototype.setpalette = function(arr){
+         Pixelation.prototype.setDrawFrom = function(elem){ this.fromImg = elem; return this; };
+         Pixelation.prototype.setDrawTo = function(elem){ this.toCanvas = elem; this.ctx = elem.getContext('2d'); return this; };
+         Pixelation.prototype.setFromImgSource = function(src){ if(this.fromImg){ this.fromImg.src = src; } return this; };
+         Pixelation.prototype.setpalette = function(arr){
          if(Array.isArray(arr) && arr.every(c=>Array.isArray(c) && c.length===3)){
          this.palette = arr.map(c=>[clamp(c[0],0,255),clamp(c[1],0,255),clamp(c[2],0,255)]);
          }
          return this;
          };
-         Pixelator.prototype.getpalette = function(){ return this.palette.slice(); };
-         Pixelator.prototype.setMaxWidth = function(v){ this.maxWidth = (typeof v==='number'&&v>0)?v:null; return this; };
-         Pixelator.prototype.setMaxHeight = function(v){ this.maxHeight = (typeof v==='number'&&v>0)?v:null; return this; };
-         Pixelator.prototype.setScale = function(v){ this.scale = clamp(Math.round(v),1,50); return this; };
+         Pixelation.prototype.getpalette = function(){ return this.palette.slice(); };
+         Pixelation.prototype.setMaxWidth = function(v){ this.maxWidth = (typeof v==='number'&&v>0)?v:null; return this; };
+         Pixelation.prototype.setMaxHeight = function(v){ this.maxHeight = (typeof v==='number'&&v>0)?v:null; return this; };
+         Pixelation.prototype.setScale = function(v){ this.scale = clamp(Math.round(v),1,50); return this; };
 
-         Pixelator.prototype.convertGrayscale = function(){
+         Pixelation.prototype.convertGrayscale = function(){
          if(!this.ctx) return this;
          const w=this.toCanvas.width, h=this.toCanvas.height;
          const imgData=this.ctx.getImageData(0,0,w,h);
@@ -614,7 +614,7 @@
          return this;
          };
 
-         Pixelator.prototype.convertpalette = function(){
+         Pixelation.prototype.convertpalette = function(){
          if(!this.ctx) return this;
          const w=this.toCanvas.width, h=this.toCanvas.height;
          const imgData=this.ctx.getImageData(0,0,w,h);
@@ -627,7 +627,7 @@
          return this;
          };
 
-         Pixelator.prototype.resizeImage = function(){
+         Pixelation.prototype.resizeImage = function(){
          if(!this.ctx) return this;
          const w=this.toCanvas.width, h=this.toCanvas.height;
          let targetW=w, targetH=h;
@@ -646,7 +646,7 @@
          return this;
          };
 
-         Pixelator.prototype.pixelate = function(){
+         Pixelation.prototype.pixelate = function(){
          if(!this.ctx) return this;
          const w=this.toCanvas.width, h=this.toCanvas.height, s=this.scale;
          const srcData=this.ctx.getImageData(0,0,w,h);
@@ -663,7 +663,7 @@
          return this;
          };
 
-         Pixelator.prototype.saveImage = function(){
+         Pixelation.prototype.saveImage = function(){
          if(!this.toCanvas) return this;
          // Prefer toBlob for better compatibility and correctness
          if (this.toCanvas.toBlob) {
@@ -689,9 +689,9 @@
          };
 
          // helpers exposed
-         Pixelator.Common = { Palettes: COMMON_PALETTES, Resolutions: COMMON_RESOLUTIONS, rgbToHex, hexToRgb };
+         Pixelation.Common = { Palettes: COMMON_PALETTES, Resolutions: COMMON_RESOLUTIONS, rgbToHex, hexToRgb };
 
-         global.Pixelator = Pixelator;
+         global.Pixelation = Pixelation;
         })(window);
     </script>
 
@@ -725,7 +725,7 @@
             ,revertBtn: document.getElementById('revertBtn')
         };
 
-        let pixelator = null;
+        let pixelation = null;
         let currentPalette = 'Image Default';
         let cropMode = false;
         let isCropped = false;
@@ -758,8 +758,8 @@
             defaultBtn.addEventListener('click', () => selectPalette('Image Default'));
             elements.paletteGrid.appendChild(defaultBtn);
             
-            Object.keys(Pixelator.Common.Palettes).forEach(name => {
-                const palette = Pixelator.Common.Palettes[name];
+            Object.keys(Pixelation.Common.Palettes).forEach(name => {
+                const palette = Pixelation.Common.Palettes[name];
                 const btn = document.createElement('div');
                 btn.className = `palette-option ${name === currentPalette ? 'active' : ''}`;
                 btn.textContent = name;
@@ -788,7 +788,7 @@
             });
             
             // Auto-apply palette effect when selected
-            if (!pixelator) return;
+            if (!pixelation) return;
             
             try {
                 if (!currentImageData) return;
@@ -807,9 +807,9 @@
                         ctx.imageSmoothingEnabled = false;
                         ctx.clearRect(0,0,elements.outputCanvas.width,elements.outputCanvas.height);
                         ctx.drawImage(img, 0, 0);
-                        pixelator.setDrawTo(elements.outputCanvas);
-                        pixelator.setpalette(Pixelator.Common.Palettes[name]);
-                        pixelator.convertpalette();
+                        pixelation.setDrawTo(elements.outputCanvas);
+                        pixelation.setpalette(Pixelation.Common.Palettes[name]);
+                        pixelation.convertpalette();
                         currentImageData = elements.outputCanvas.toDataURL();
                         isCropped = currentImageData !== originalImageData;
                         croppedImageData = isCropped ? currentImageData : null;
@@ -902,7 +902,7 @@
         }
 
         function enableCropMode() {
-            if (!pixelator) return;
+            if (!pixelation) return;
 
             cropMode = true;
             // keep a backup of the current working image so cancel can restore
@@ -949,7 +949,7 @@
         }
 
         function applyCrop() {
-            if (!pixelator) return;
+            if (!pixelation) return;
 
             if (!currentImageData) return;
             pushHistory();
@@ -1152,10 +1152,10 @@
                     ctx.clearRect(0,0,elements.outputCanvas.width, elements.outputCanvas.height);
                     ctx.drawImage(img, 0, 0);
 
-                    // Initialize Pixelator to reference the visible canvas
-                    pixelator = new Pixelator(null, elements.outputCanvas);
-                    pixelator.setpalette(Pixelator.Common.Palettes[currentPalette]);
-                    pixelator.setScale(parseInt(elements.pixelScale.value));
+                    // Initialize Pixelation to reference the visible canvas
+                    pixelation = new Pixelation(null, elements.outputCanvas);
+                    pixelation.setpalette(Pixelation.Common.Palettes[currentPalette]);
+                    pixelation.setScale(parseInt(elements.pixelScale.value));
 
                     elements.placeholder.style.display = 'none';
                     elements.outputCanvas.style.display = 'block';
@@ -1182,7 +1182,7 @@
         elements.pixelScale.addEventListener('input', (e) => {
             const value = e.target.value;
             elements.scaleValue.textContent = value;
-            if (pixelator) {
+            if (pixelation) {
                 if (!currentImageData) return;
                 pushHistory();
                 const img = new Image();
@@ -1193,9 +1193,9 @@
                     ctx.imageSmoothingEnabled = false;
                     ctx.clearRect(0,0,elements.outputCanvas.width,elements.outputCanvas.height);
                     ctx.drawImage(img, 0, 0);
-                    pixelator.setDrawTo(elements.outputCanvas);
-                    pixelator.setScale(parseInt(value));
-                    pixelator.pixelate();
+                    pixelation.setDrawTo(elements.outputCanvas);
+                    pixelation.setScale(parseInt(value));
+                    pixelation.pixelate();
                     currentImageData = elements.outputCanvas.toDataURL();
                     isCropped = currentImageData !== originalImageData;
                     croppedImageData = isCropped ? currentImageData : null;
@@ -1207,7 +1207,7 @@
         });
 
         elements.outputResolution.addEventListener('change', (e) => {
-            if (!pixelator) return;
+            if (!pixelation) return;
 
             const value = e.target.value;
             if (value) {
@@ -1236,10 +1236,10 @@
         });
 
         elements.downloadBtn.addEventListener('click', () => {
-            if (!pixelator) return;
+            if (!pixelation) return;
 
                 try {
-                    pixelator.saveImage();
+                    pixelation.saveImage();
                     // notification removed
                 } catch (error) {
                     console.error(error);
@@ -1285,8 +1285,8 @@
             elements.undoBtn.disabled = true;
             elements.revertBtn.disabled = true;
             
-            // Clear pixelator
-            pixelator = null;
+            // Clear pixelation
+            pixelation = null;
             history = [];
             currentImageData = null;
             originalImageData = null;
