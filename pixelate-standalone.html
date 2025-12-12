@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixelation Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+            align-items: start;
+        }
+
+        .section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .section h2 {
+            color: #333;
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            color: #555;
+            font-size: 0.95em;
+        }
+
+        input[type="file"],
+        select,
+        input[type="number"],
+        input[type="range"] {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        input[type="file"]:focus,
+        select:focus,
+        input[type="number"]:focus,
+        input[type="range"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        input[type="range"] {
+            height: 6px;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        .range-value {
+            color: #667eea;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid #ddd;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+
+        .btn-danger {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #ee5a52;
+        }
+
+        .preview-container {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+        }
+
+        .image-holder {
+            position: relative;
+            max-width: 100%;
+            max-height: 640px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        img#sourceImage {
+            max-width: 100%;
+            max-height: 640px;
+            display: none;
+        }
+
+        canvas#outputCanvas {
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            max-width: 100%;
+            max-height: 640px;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .placeholder {
+            color: #999;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .placeholder svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .palette-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .palette-option {
+            padding: 12px;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #f9f9f9;
+            text-align: center;
+            transition: all 0.3s;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        .palette-option:hover {
+            border-color: #667eea;
+            background: #f0f0f0;
+        }
+
+        .palette-option.active {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .palette-preview {
+            display: flex;
+            gap: 3px;
+            margin-top: 8px;
+            height: 20px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .palette-color {
+            flex: 1;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 4px;
+            color: #1565c0;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #c62828;
+            color: #b71c1c;
+        }
+
+        .success {
+            background: #e8f5e9;
+            border-left: 4px solid #2e7d32;
+            color: #1b5e20;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            button {
+                min-width: auto;
+            }
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .slider-container input[type="range"] {
+            flex: 1;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .info-item {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+
+        .info-item strong {
+            display: block;
+            color: #333;
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Pixelation Tool</h1>
+            <p>Transform your images into pixel art with customizable palettes and effects</p>
+        </div>
+
+        <div class="content">
+            <!-- Left Panel: Controls -->
+            <div class="section">
+                <h2>Controls</h2>
+
+                <div class="control-group">
+                    <label for="imageUpload">Upload Image</label>
+                    <input type="file" id="imageUpload" accept="image/*">
+                </div>
+
+                <div class="control-group">
+                    <label>Palette</label>
+                    <div class="palette-grid" id="paletteGrid"></div>
+                </div>
+
+                <div class="control-group">
+                    <label for="pixelScale">Pixel Scale</label>
+                    <div class="slider-container">
+                        <input type="range" id="pixelScale" min="1" max="20" value="1">
+                        <span class="range-value"><span id="scaleValue">1</span>px</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="outputResolution">Output Resolution</label>
+                    <select id="outputResolution">
+                        <option value="">Auto (match input)</option>
+                        <option value="128x128">128 × 128</option>
+                        <option value="64x64">64 × 64</option>
+                        <option value="32x32">32 × 32</option>
+                        <option value="16x16">16 × 16</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>Effects</label>
+                    <div class="button-group">
+                        <button class="btn-secondary" id="grayscaleBtn">Grayscale</button>
+                        <button class="btn-secondary" id="paletteBtn">Apply Palette</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Actions</label>
+                    <div class="button-group">
+                        <button class="btn-primary" id="pixelateBtn" disabled>Pixelate</button>
+                        <button class="btn-primary" id="downloadBtn" disabled>Download</button>
+                        <button class="btn-danger" id="resetBtn">Reset</button>
+                    </div>
+                </div>
+
+                <div id="message" class="info-box" style="display: none;"></div>
+            </div>
+
+            <!-- Right Panel: Preview -->
+            <div class="section">
+                <h2>Preview</h2>
+                <div class="preview-container">
+                    <img id="sourceImage" alt="Source Image">
+                    <canvas id="outputCanvas"></canvas>
+                    <div class="placeholder" id="placeholder">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <p>Upload an image to get started</p>
+                    </div>
+                </div>
+
+                <div class="info-grid" id="infoGrid" style="display: none;">
+                    <div class="info-item">
+                        <strong>Dimensions:</strong>
+                        <span id="imageDims">-</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Palette:</strong>
+                        <span id="paletteInfo">PICO-8</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pixelator API Script -->
+    <script>
+        /* Pixelation API - client-side JavaScript */
+        (function(global){
+         function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+         function rgbToHex(r,g,b){ return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+         function hexToRgb(hex){
+         hex = hex.replace('#','');
+         if (hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+         const num = parseInt(hex,16);
+         return [ (num>>16)&255, (num>>8)&255, num&255 ];
+         }
+         function nearestColor(r,g,b,palette){
+         let best=[0,0,0], bestDist=Infinity;
+         for(const c of palette){
+         const pr=c[0], pg=c[1], pb=c[2];
+         const dr=r-pr, dg=g-pg, db=b-pb;
+         const d=dr*dr+dg*dg+db*db;
+         if(d<bestDist){ bestDist=d; best=[pr,pg,pb]; }
+         }
+         return best;
+         }
+
+         const COMMON_PALETTES = {
+         // Popular palettes
+         "Greyscale": Array.from({length:16},(_,i)=>{ const v=Math.round(i*255/15); return [v,v,v]; }),
+         "NES": [[0,0,0],[124,124,124],[0,0,252],[0,0,188],[68,40,188],[148,0,132],[168,0,32],[168,16,0],[136,20,0],[80,48,0],[0,120,0],[0,104,0],[0,88,0],[0,64,88],[0,0,0],[0,0,0]],
+         "GameBoy": [[15,56,15],[48,98,48],[139,172,15],[155,188,15]],
+         "C64": [[0,0,0],[255,255,255],[104,55,43],[112,164,178],[111,61,134],[88,141,67],[53,40,121],[184,199,111],[111,79,37],[67,57,0],[154,103,89],[68,68,68],[108,108,108],[154,154,154],[190,190,190],[255,255,255]],
+         "PICO-8": [[0,0,0],[29,43,83],[126,37,83],[0,135,81],[171,82,54],[95,87,79],[194,195,199],[255,241,232],[255,0,77],[255,163,0],[255,236,39],[0,228,54],[41,173,255],[131,118,156],[255,119,168],[255,204,170]],
+         "Web Safe": (function(){
+         const vals=[0,51,102,153,204,255], out=[]; for(const r of vals){ for(const g of vals){ for(const b of vals){ out.push([r,g,b]); } } } return out;
+         })()
+         };
+
+         const COMMON_RESOLUTIONS = [ [128,128],[64,64],[32,32],[16,16] ];
+
+         function Pixelator(fromImg, toCanvas){
+         this.fromImg = fromImg || null;
+         this.toCanvas = toCanvas || null;
+         this.ctx = (this.toCanvas ? this.toCanvas.getContext('2d') : null);
+         this.palette = COMMON_PALETTES['PICO-8'];
+         this.scale =4; // default pixel scale
+         this.maxWidth = null;
+         this.maxHeight = null;
+         if (this.fromImg) this.hideFromImg();
+         }
+
+         // Draw the source image scaled to the CURRENT canvas size
+         Pixelator.prototype.draw = function(){
+         if(!this.fromImg || !this.toCanvas) return this;
+         const srcW = this.fromImg.naturalWidth || this.fromImg.width;
+         const srcH = this.fromImg.naturalHeight || this.fromImg.height;
+         const dstW = this.toCanvas.width;
+         const dstH = this.toCanvas.height;
+         this.ctx = this.toCanvas.getContext('2d');
+         this.ctx.imageSmoothingEnabled = false;
+         // Fill canvas with scaled image to match selected output resolution
+         this.ctx.clearRect(0,0,dstW,dstH);
+         this.ctx.drawImage(this.fromImg,0,0, srcW, srcH,0,0, dstW, dstH);
+         return this;
+         };
+
+         Pixelator.prototype.hideFromImg = function(){
+         if(this.fromImg){ this.fromImg.style.display = 'none'; }
+         return this;
+         };
+
+         Pixelator.prototype.setDrawFrom = function(elem){ this.fromImg = elem; return this; };
+         Pixelator.prototype.setDrawTo = function(elem){ this.toCanvas = elem; this.ctx = elem.getContext('2d'); return this; };
+         Pixelator.prototype.setFromImgSource = function(src){ if(this.fromImg){ this.fromImg.src = src; } return this; };
+         Pixelator.prototype.setpalette = function(arr){
+         if(Array.isArray(arr) && arr.every(c=>Array.isArray(c) && c.length===3)){
+         this.palette = arr.map(c=>[clamp(c[0],0,255),clamp(c[1],0,255),clamp(c[2],0,255)]);
+         }
+         return this;
+         };
+         Pixelator.prototype.getpalette = function(){ return this.palette.slice(); };
+         Pixelator.prototype.setMaxWidth = function(v){ this.maxWidth = (typeof v==='number'&&v>0)?v:null; return this; };
+         Pixelator.prototype.setMaxHeight = function(v){ this.maxHeight = (typeof v==='number'&&v>0)?v:null; return this; };
+         Pixelator.prototype.setScale = function(v){ this.scale = clamp(Math.round(v),1,50); return this; };
+
+         Pixelator.prototype.convertGrayscale = function(){
+         if(!this.ctx) return this;
+         const w=this.toCanvas.width, h=this.toCanvas.height;
+         const imgData=this.ctx.getImageData(0,0,w,h);
+         const d=imgData.data;
+         for(let i=0;i<d.length;i+=4){
+         const r=d[i], g=d[i+1], b=d[i+2];
+         const y=Math.round(0.299*r+0.587*g+0.114*b);
+         d[i]=d[i+1]=d[i+2]=y;
+         }
+         this.ctx.putImageData(imgData,0,0);
+         return this;
+         };
+
+         Pixelator.prototype.convertpalette = function(){
+         if(!this.ctx) return this;
+         const w=this.toCanvas.width, h=this.toCanvas.height;
+         const imgData=this.ctx.getImageData(0,0,w,h);
+         const d=imgData.data, p=this.palette;
+         for(let i=0;i<d.length;i+=4){
+         const n = nearestColor(d[i], d[i+1], d[i+2], p);
+         d[i]=n[0]; d[i+1]=n[1]; d[i+2]=n[2];
+         }
+         this.ctx.putImageData(imgData,0,0);
+         return this;
+         };
+
+         Pixelator.prototype.resizeImage = function(){
+         if(!this.ctx) return this;
+         const w=this.toCanvas.width, h=this.toCanvas.height;
+         let targetW=w, targetH=h;
+         if(this.maxHeight && h>this.maxHeight){
+         const ratio = this.maxHeight/h; targetH=this.maxHeight; targetW=Math.round(w*ratio);
+         } else if(this.maxWidth && w>this.maxWidth){
+         const ratio = this.maxWidth/w; targetW=this.maxWidth; targetH=Math.round(h*ratio);
+         }
+         if(targetW===w && targetH===h) return this;
+         const temp=document.createElement('canvas'); temp.width=targetW; temp.height=targetH;
+         const tctx=temp.getContext('2d'); tctx.imageSmoothingEnabled=false;
+         tctx.drawImage(this.toCanvas,0,0,w,h,0,0,targetW,targetH);
+         this.toCanvas.width=targetW; this.toCanvas.height=targetH;
+         this.ctx=this.toCanvas.getContext('2d'); this.ctx.imageSmoothingEnabled=false;
+         this.ctx.drawImage(temp,0,0);
+         return this;
+         };
+
+         Pixelator.prototype.pixelate = function(){
+         if(!this.ctx) return this;
+         const w=this.toCanvas.width, h=this.toCanvas.height, s=this.scale;
+         const srcData=this.ctx.getImageData(0,0,w,h);
+         const dest=this.ctx; dest.clearRect(0,0,w,h);
+         dest.imageSmoothingEnabled=false;
+         for(let y=0; y<h; y+=s){
+         for(let x=0; x<w; x+=s){
+         const idx=((y*w)+x)*4;
+         const r=srcData.data[idx], g=srcData.data[idx+1], b=srcData.data[idx+2], a=srcData.data[idx+3];
+         dest.fillStyle = `rgba(${r},${g},${b},${a/255})`;
+         dest.fillRect(x,y,s,s);
+         }
+         }
+         return this;
+         };
+
+         Pixelator.prototype.saveImage = function(){
+         if(!this.toCanvas) return this;
+         // Prefer toBlob for better compatibility and correctness
+         if (this.toCanvas.toBlob) {
+         this.toCanvas.toBlob((blob)=>{
+         if(!blob) return;
+         const url = URL.createObjectURL(blob);
+         const link = document.createElement('a');
+         link.href = url;
+         link.download = 'pixelation.png';
+         document.body.appendChild(link);
+         link.click();
+         document.body.removeChild(link);
+         setTimeout(()=>URL.revokeObjectURL(url),1000);
+         }, 'image/png');
+         } else {
+         const dataUrl = this.toCanvas.toDataURL('image/png');
+         const link=document.createElement('a');
+         link.download = 'pixelation.png';
+         link.href = dataUrl;
+         link.click();
+         }
+         return this;
+         };
+
+         // helpers exposed
+         Pixelator.Common = { Palettes: COMMON_PALETTES, Resolutions: COMMON_RESOLUTIONS, rgbToHex, hexToRgb };
+
+         global.Pixelator = Pixelator;
+        })(window);
+    </script>
+
+    <!-- Application Logic -->
+    <script>
+        const elements = {
+            imageUpload: document.getElementById('imageUpload'),
+            sourceImage: document.getElementById('sourceImage'),
+            outputCanvas: document.getElementById('outputCanvas'),
+            pixelateBtn: document.getElementById('pixelateBtn'),
+            downloadBtn: document.getElementById('downloadBtn'),
+            resetBtn: document.getElementById('resetBtn'),
+            grayscaleBtn: document.getElementById('grayscaleBtn'),
+            paletteBtn: document.getElementById('paletteBtn'),
+            pixelScale: document.getElementById('pixelScale'),
+            scaleValue: document.getElementById('scaleValue'),
+            outputResolution: document.getElementById('outputResolution'),
+            message: document.getElementById('message'),
+            placeholder: document.getElementById('placeholder'),
+            paletteGrid: document.getElementById('paletteGrid'),
+            infoGrid: document.getElementById('infoGrid'),
+            imageDims: document.getElementById('imageDims'),
+            paletteInfo: document.getElementById('paletteInfo')
+        };
+
+        let pixelator = null;
+        let currentPalette = 'PICO-8';
+
+        function showMessage(text, type = 'info') {
+            elements.message.textContent = text;
+            elements.message.className = `info-box ${type}`;
+            elements.message.style.display = 'block';
+            setTimeout(() => {
+                elements.message.style.display = 'none';
+            }, 4000);
+        }
+
+        function initPaletteGrid() {
+            elements.paletteGrid.innerHTML = '';
+            Object.keys(Pixelator.Common.Palettes).forEach(name => {
+                const palette = Pixelator.Common.Palettes[name];
+                const btn = document.createElement('div');
+                btn.className = `palette-option ${name === currentPalette ? 'active' : ''}`;
+                btn.textContent = name;
+
+                const preview = document.createElement('div');
+                preview.className = 'palette-preview';
+                const step = Math.ceil(palette.length / 5);
+                for (let i = 0; i < palette.length; i += step) {
+                    const [r, g, b] = palette[i];
+                    const color = document.createElement('div');
+                    color.className = 'palette-color';
+                    color.style.backgroundColor = `rgb(${r},${g},${b})`;
+                    preview.appendChild(color);
+                }
+
+                btn.appendChild(preview);
+                btn.addEventListener('click', () => selectPalette(name));
+                elements.paletteGrid.appendChild(btn);
+            });
+        }
+
+        function selectPalette(name) {
+            currentPalette = name;
+            if (pixelator) {
+                pixelator.setpalette(Pixelator.Common.Palettes[name]);
+                elements.paletteInfo.textContent = name;
+            }
+            document.querySelectorAll('.palette-option').forEach(el => {
+                el.classList.toggle('active', el.textContent === name);
+            });
+            showMessage(`Palette changed to ${name}`, 'success');
+        }
+
+        elements.imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                elements.sourceImage.src = event.target.result;
+                elements.sourceImage.onload = () => {
+                    const naturalWidth = elements.sourceImage.naturalWidth;
+                    const naturalHeight = elements.sourceImage.naturalHeight;
+
+                    elements.outputCanvas.width = naturalWidth;
+                    elements.outputCanvas.height = naturalHeight;
+
+                    pixelator = new Pixelator(elements.sourceImage, elements.outputCanvas);
+                    pixelator.setpalette(Pixelator.Common.Palettes[currentPalette]);
+                    pixelator.setScale(parseInt(elements.pixelScale.value));
+                    pixelator.draw();
+
+                    elements.placeholder.style.display = 'none';
+                    elements.outputCanvas.style.display = 'block';
+                    elements.pixelateBtn.disabled = false;
+                    elements.downloadBtn.disabled = false;
+                    elements.infoGrid.style.display = 'grid';
+                    elements.imageDims.textContent = `${naturalWidth}×${naturalHeight}px`;
+
+                    showMessage('Image loaded successfully', 'success');
+                };
+            };
+            reader.readAsDataURL(file);
+        });
+
+        elements.pixelScale.addEventListener('input', (e) => {
+            const value = e.target.value;
+            elements.scaleValue.textContent = value;
+            if (pixelator) {
+                pixelator.setScale(parseInt(value));
+                pixelator.draw();
+            }
+        });
+
+        elements.outputResolution.addEventListener('change', (e) => {
+            if (!pixelator) return;
+
+            const value = e.target.value;
+            if (value) {
+                const [width, height] = value.split('x').map(Number);
+                elements.outputCanvas.width = width;
+                elements.outputCanvas.height = height;
+                // Set CSS dimensions for 640x640 preview display
+                elements.outputCanvas.style.width = '640px';
+                elements.outputCanvas.style.height = '640px';
+                pixelator.setDrawTo(elements.outputCanvas);
+                pixelator.draw();
+                elements.imageDims.textContent = `${width}×${height}px`;
+                showMessage(`Resolution changed to ${width}×${height}px`, 'success');
+            }
+        });
+
+        elements.pixelateBtn.addEventListener('click', () => {
+            if (!pixelator) return;
+
+            try {
+                pixelator.pixelate();
+                showMessage('Image pixelated successfully!', 'success');
+            } catch (error) {
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        });
+
+        elements.grayscaleBtn.addEventListener('click', () => {
+            if (!pixelator) return;
+
+            try {
+                pixelator.draw();
+                pixelator.convertGrayscale();
+                showMessage('Grayscale effect applied!', 'success');
+            } catch (error) {
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        });
+
+        elements.paletteBtn.addEventListener('click', () => {
+            if (!pixelator) return;
+
+            try {
+                pixelator.draw();
+                pixelator.convertpalette();
+                showMessage(`${currentPalette} palette applied!`, 'success');
+            } catch (error) {
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        });
+
+        elements.downloadBtn.addEventListener('click', () => {
+            if (!pixelator) return;
+
+            try {
+                pixelator.saveImage();
+                showMessage('Image downloaded!', 'success');
+            } catch (error) {
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        });
+
+        elements.resetBtn.addEventListener('click', () => {
+            // Clear image upload
+            elements.imageUpload.value = '';
+            
+            // Reset all controls to defaults
+            elements.pixelScale.value = '1';
+            elements.scaleValue.textContent = '1';
+            elements.outputResolution.value = '';
+            
+            // Reset palette
+            currentPalette = 'PICO-8';
+            document.querySelectorAll('.palette-option').forEach(el => {
+                el.classList.toggle('active', el.textContent === 'PICO-8');
+            });
+            
+            // Reset UI state
+            elements.sourceImage.style.display = 'none';
+            elements.outputCanvas.style.display = 'none';
+            elements.outputCanvas.style.width = '';
+            elements.outputCanvas.style.height = '';
+            elements.placeholder.style.display = 'block';
+            elements.infoGrid.style.display = 'none';
+            
+            // Disable action buttons
+            elements.pixelateBtn.disabled = true;
+            elements.downloadBtn.disabled = true;
+            
+            // Clear pixelator
+            pixelator = null;
+            
+            showMessage('All options reset to defaults', 'success');
+        });
+
+        // Initialize palette grid on page load
+        initPaletteGrid();
+    </script>
+</body>
+</html>
