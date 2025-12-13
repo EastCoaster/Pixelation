@@ -811,6 +811,8 @@
                         pixelation.setpalette(Pixelation.Common.Palettes[name]);
                         pixelation.convertpalette();
                         currentImageData = elements.outputCanvas.toDataURL();
+                        // Update preview display size after applying palette
+                        setCanvasDisplaySize();
                         isCropped = currentImageData !== originalImageData;
                         croppedImageData = isCropped ? currentImageData : null;
                         elements.paletteInfo.textContent = name;
@@ -843,6 +845,8 @@
                 ctx.imageSmoothingEnabled = false;
                 ctx.clearRect(0,0,elements.outputCanvas.width, elements.outputCanvas.height);
                 ctx.drawImage(img, 0, 0);
+                // Ensure preview displays at constrained size while preserving aspect ratio
+                setCanvasDisplaySize();
                 if (updateCurrent) {
                     currentImageData = elements.outputCanvas.toDataURL();
                     isCropped = currentImageData !== originalImageData;
@@ -853,6 +857,22 @@
                 elements.revertBtn.disabled = (currentImageData === originalImageData);
             };
             img.src = dataURL;
+        }
+
+        // Set the canvas CSS display size to fit within the preview constraints (512x512)
+        function setCanvasDisplaySize() {
+            try {
+                const max = 512;
+                const w = elements.outputCanvas.width || 1;
+                const h = elements.outputCanvas.height || 1;
+                const scale = Math.min(max / w, max / h);
+                const displayW = Math.max(1, Math.round(w * scale));
+                const displayH = Math.max(1, Math.round(h * scale));
+                elements.outputCanvas.style.width = displayW + 'px';
+                elements.outputCanvas.style.height = displayH + 'px';
+            } catch (e) {
+                // ignore
+            }
         }
 
         function undoLast() {
@@ -995,6 +1015,8 @@
                 ctx.drawImage(tempCanvas, 0, 0);
 
                 // Store the cropped image data for future operations
+                // Update preview display to fit the cropped square
+                setCanvasDisplaySize();
                 isCropped = true;
                 currentImageData = elements.outputCanvas.toDataURL();
                 croppedImageData = currentImageData;
@@ -1151,6 +1173,8 @@
                     ctx.imageSmoothingEnabled = false;
                     ctx.clearRect(0,0,elements.outputCanvas.width, elements.outputCanvas.height);
                     ctx.drawImage(img, 0, 0);
+                    // Ensure preview displays original image preserving aspect ratio within preview constraints
+                    setCanvasDisplaySize();
 
                     // Initialize Pixelation to reference the visible canvas
                     pixelation = new Pixelation(null, elements.outputCanvas);
@@ -1197,6 +1221,8 @@
                     pixelation.setScale(parseInt(value));
                     pixelation.pixelate();
                     currentImageData = elements.outputCanvas.toDataURL();
+                    // Update preview display size after pixelation
+                    setCanvasDisplaySize();
                     isCropped = currentImageData !== originalImageData;
                     croppedImageData = isCropped ? currentImageData : null;
                     elements.undoBtn.disabled = history.length === 0;
@@ -1224,6 +1250,8 @@
                     ctx.clearRect(0,0,width,height);
                     ctx.drawImage(img, 0, 0, width, height);
                     currentImageData = elements.outputCanvas.toDataURL();
+                    // Update preview display size to fit the new resolution
+                    setCanvasDisplaySize();
                     isCropped = currentImageData !== originalImageData;
                     croppedImageData = isCropped ? currentImageData : null;
                     elements.imageDims.textContent = `${width}×${height}px`;
