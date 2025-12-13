@@ -448,8 +448,19 @@
                     <button class="btn-secondary" id="cropToggleBtn" disabled>Enable Crop Tool</button>
                     <div class="crop-controls" id="cropControls">
                         <div class="crop-dimension-input">
-                            <label for="cropSize">Square Size (px)</label>
-                            <input type="number" id="cropSize" min="10" value="256">
+                            <label for="cropLockSquare">Aspect Ratio</label>
+                            <select id="cropLockSquare">
+                                <option value="square">Square (1:1)</option>
+                                <option value="free">Free</option>
+                            </select>
+                        </div>
+                        <div class="crop-dimension-input">
+                            <label for="cropWidth">Width (px)</label>
+                            <input type="number" id="cropWidth" min="10" value="256">
+                        </div>
+                        <div class="crop-dimension-input">
+                            <label for="cropHeight">Height (px)</label>
+                            <input type="number" id="cropHeight" min="10" value="256">
                         </div>
                         <div class="crop-dimension-input">
                             <label for="cropX">X Position</label>
@@ -716,7 +727,9 @@
             cropToggleBtn: document.getElementById('cropToggleBtn'),
             cropControls: document.getElementById('cropControls'),
             cropOverlay: document.getElementById('cropOverlay'),
-            cropSize: document.getElementById('cropSize'),
+            cropLockSquare: document.getElementById('cropLockSquare'),
+            cropWidth: document.getElementById('cropWidth'),
+            cropHeight: document.getElementById('cropHeight'),
             cropX: document.getElementById('cropX'),
             cropY: document.getElementById('cropY'),
             cropApplyBtn: document.getElementById('cropApplyBtn'),
@@ -734,7 +747,8 @@
         let currentImageData = null;
         let backupBeforeCrop = null;
         let cropState = {
-            size: 256,
+            width: 256,
+            height: 256,
             x: 0,
             y: 0,
             isDragging: false,
@@ -742,7 +756,8 @@
             dragStartX: 0,
             dragStartY: 0,
             originalCropX: 0,
-            originalCropY: 0
+            originalCropY: 0,
+            lockToSquare: true
         };
         let originalImageData = null;
 
@@ -917,8 +932,8 @@
             // Position the overlay over the crop area
             overlay.style.left = (canvasLeft + cropState.x * scaleX) + 'px';
             overlay.style.top = (canvasTop + cropState.y * scaleY) + 'px';
-            overlay.style.width = (cropState.size * scaleX) + 'px';
-            overlay.style.height = (cropState.size * scaleY) + 'px';
+            overlay.style.width = (cropState.width * scaleX) + 'px';
+            overlay.style.height = (cropState.height * scaleY) + 'px';
         }
 
         function enableCropMode() {
@@ -933,11 +948,13 @@
                 elements.outputCanvas.width,
                 elements.outputCanvas.height
             );
-            cropState.size = Math.min(256, maxSize);
-            cropState.x = (elements.outputCanvas.width - cropState.size) / 2;
-            cropState.y = (elements.outputCanvas.height - cropState.size) / 2;
+            cropState.width = Math.min(256, maxSize);
+            cropState.height = Math.min(256, maxSize);
+            cropState.x = (elements.outputCanvas.width - cropState.width) / 2;
+            cropState.y = (elements.outputCanvas.height - cropState.height) / 2;
 
-            elements.cropSize.value = cropState.size;
+            elements.cropWidth.value = cropState.width;
+            elements.cropHeight.value = cropState.height;
             elements.cropX.value = cropState.x;
             elements.cropY.value = cropState.y;
 
@@ -975,24 +992,25 @@
             pushHistory();
 
             // Clamp values based on current canvas size
-            const maxX = Math.max(0, elements.outputCanvas.width - cropState.size);
-            const maxY = Math.max(0, elements.outputCanvas.height - cropState.size);
+            const maxX = Math.max(0, elements.outputCanvas.width - cropState.width);
+            const maxY = Math.max(0, elements.outputCanvas.height - cropState.height);
             cropState.x = Math.max(0, Math.min(cropState.x, maxX));
             cropState.y = Math.max(0, Math.min(cropState.y, maxY));
-            cropState.size = Math.max(10, Math.min(
-                cropState.size,
-                Math.min(
-                    elements.outputCanvas.width - cropState.x,
-                    elements.outputCanvas.height - cropState.y
-                )
+            cropState.width = Math.max(10, Math.min(
+                cropState.width,
+                elements.outputCanvas.width - cropState.x
+            ));
+            cropState.height = Math.max(10, Math.min(
+                cropState.height,
+                elements.outputCanvas.height - cropState.y
             ));
 
             // Load current image into an offscreen canvas and crop from it
             const srcImg = new Image();
             srcImg.onload = () => {
                 const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = cropState.size;
-                tempCanvas.height = cropState.size;
+                tempCanvas.width = cropState.width;
+                tempCanvas.height = cropState.height;
                 const tempCtx = tempCanvas.getContext('2d');
                 tempCtx.imageSmoothingEnabled = false;
                 // Calculate scale between displayed canvas and source image if necessary
@@ -1001,14 +1019,14 @@
                 tempCtx.drawImage(
                     srcImg,
                     cropState.x, cropState.y,
-                    cropState.size, cropState.size,
+                    cropState.width, cropState.height,
                     0, 0,
-                    cropState.size, cropState.size
+                    cropState.width, cropState.height
                 );
 
                 // Update output canvas with cropped image
-                elements.outputCanvas.width = cropState.size;
-                elements.outputCanvas.height = cropState.size;
+                elements.outputCanvas.width = cropState.width;
+                elements.outputCanvas.height = cropState.height;
                 const ctx = elements.outputCanvas.getContext('2d');
                 ctx.imageSmoothingEnabled = false;
                 ctx.clearRect(0,0,elements.outputCanvas.width,elements.outputCanvas.height);
@@ -1020,7 +1038,7 @@
                 isCropped = true;
                 currentImageData = elements.outputCanvas.toDataURL();
                 croppedImageData = currentImageData;
-                elements.imageDims.textContent = `${cropState.size}×${cropState.size}px`;
+                elements.imageDims.textContent = `${cropState.width}×${cropState.height}px`;
 
                 // Disable crop mode without restoring original
                 disableCropMode(false);
@@ -1062,8 +1080,8 @@
                 const deltaX = (e.clientX - cropState.dragStartX) * scaleX;
                 const deltaY = (e.clientY - cropState.dragStartY) * scaleY;
 
-                const maxX = Math.max(0, canvas.width - cropState.size);
-                const maxY = Math.max(0, canvas.height - cropState.size);
+                const maxX = Math.max(0, canvas.width - cropState.width);
+                const maxY = Math.max(0, canvas.height - cropState.height);
 
                 cropState.x = Math.max(0, Math.min(cropState.originalCropX + deltaX, maxX));
                 cropState.y = Math.max(0, Math.min(cropState.originalCropY + deltaY, maxY));
@@ -1075,20 +1093,48 @@
             } else if (cropState.isResizing) {
                 const deltaX = (e.clientX - cropState.dragStartX) * scaleX;
                 const deltaY = (e.clientY - cropState.dragStartY) * scaleY;
+                const resizeDamping = 0.25; // Reduce resize sensitivity
 
-                const newSize = Math.max(
-                    10,
-                    Math.min(
-                        cropState.size + Math.max(deltaX, deltaY),
+                if (cropState.lockToSquare) {
+                    // For square mode, use the maximum delta and apply to both
+                    const deltaSize = Math.max(deltaX, deltaY) * resizeDamping;
+                    const newSize = Math.max(
+                        10,
                         Math.min(
-                            canvas.width - cropState.x,
+                            cropState.width + deltaSize,
+                            Math.min(
+                                canvas.width - cropState.x,
+                                canvas.height - cropState.y
+                            )
+                        )
+                    );
+
+                    cropState.width = newSize;
+                    cropState.height = newSize;
+                    elements.cropWidth.value = Math.round(cropState.width);
+                    elements.cropHeight.value = Math.round(cropState.height);
+                } else {
+                    // For free aspect ratio, apply deltas independently
+                    const newWidth = Math.max(
+                        10,
+                        Math.min(
+                            cropState.width + deltaX * resizeDamping,
+                            canvas.width - cropState.x
+                        )
+                    );
+                    const newHeight = Math.max(
+                        10,
+                        Math.min(
+                            cropState.height + deltaY * resizeDamping,
                             canvas.height - cropState.y
                         )
-                    )
-                );
+                    );
 
-                cropState.size = newSize;
-                elements.cropSize.value = Math.round(cropState.size);
+                    cropState.width = newWidth;
+                    cropState.height = newHeight;
+                    elements.cropWidth.value = Math.round(cropState.width);
+                    elements.cropHeight.value = Math.round(cropState.height);
+                }
 
                 updateCropOverlay();
             }
@@ -1108,20 +1154,37 @@
             }
         });
 
-        elements.cropSize.addEventListener('change', (e) => {
-            cropState.size = Math.max(10, parseInt(e.target.value) || 256);
-            const maxSize = Math.min(
-                elements.outputCanvas.width - cropState.x,
-                elements.outputCanvas.height - cropState.y
-            );
-            cropState.size = Math.min(cropState.size, maxSize);
-            elements.cropSize.value = cropState.size;
+        elements.cropLockSquare.addEventListener('change', (e) => {
+            cropState.lockToSquare = e.target.value === 'square';
+        });
+
+        elements.cropWidth.addEventListener('change', (e) => {
+            cropState.width = Math.max(10, parseInt(e.target.value) || 256);
+            const maxWidth = elements.outputCanvas.width - cropState.x;
+            cropState.width = Math.min(cropState.width, maxWidth);
+            if (cropState.lockToSquare) {
+                cropState.height = cropState.width;
+                elements.cropHeight.value = cropState.height;
+            }
+            elements.cropWidth.value = cropState.width;
+            updateCropOverlay();
+        });
+
+        elements.cropHeight.addEventListener('change', (e) => {
+            cropState.height = Math.max(10, parseInt(e.target.value) || 256);
+            const maxHeight = elements.outputCanvas.height - cropState.y;
+            cropState.height = Math.min(cropState.height, maxHeight);
+            if (cropState.lockToSquare) {
+                cropState.width = cropState.height;
+                elements.cropWidth.value = cropState.width;
+            }
+            elements.cropHeight.value = cropState.height;
             updateCropOverlay();
         });
 
         elements.cropX.addEventListener('change', (e) => {
             cropState.x = Math.max(0, parseInt(e.target.value) || 0);
-            const maxX = Math.max(0, elements.outputCanvas.width - cropState.size);
+            const maxX = Math.max(0, elements.outputCanvas.width - cropState.width);
             cropState.x = Math.min(cropState.x, maxX);
             elements.cropX.value = cropState.x;
             updateCropOverlay();
@@ -1129,7 +1192,7 @@
 
         elements.cropY.addEventListener('change', (e) => {
             cropState.y = Math.max(0, parseInt(e.target.value) || 0);
-            const maxY = Math.max(0, elements.outputCanvas.height - cropState.size);
+            const maxY = Math.max(0, elements.outputCanvas.height - cropState.height);
             cropState.y = Math.min(cropState.y, maxY);
             elements.cropY.value = cropState.y;
             updateCropOverlay();
