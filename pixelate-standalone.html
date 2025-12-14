@@ -196,8 +196,8 @@
         canvas#outputCanvas {
             border: 2px solid #ddd;
             border-radius: 6px;
-            width: 512px;
-            height: 512px;
+            max-width: 100%;
+            height: auto;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
         }
@@ -215,49 +215,31 @@
             opacity: 0.5;
         }
 
-        .palette-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 10px;
-            margin: 10px 0;
+        /* Compact palette dropdown */
+        .palette-dropdown { position: relative; }
+        .palette-trigger {
+            display: flex; align-items: center; justify-content: space-between;
+            width: 100%; padding: 10px 12px; border: 2px solid #ddd; border-radius: 6px;
+            background: #fff; cursor: pointer; font-weight: 600; color: #333;
         }
-
-        .palette-option {
-            padding: 12px;
-            border: 2px solid transparent;
-            border-radius: 6px;
-            cursor: pointer;
-            background: #f9f9f9;
-            text-align: center;
-            transition: all 0.3s;
-            font-weight: 600;
-            font-size: 0.9em;
-            color: #555;
+        .palette-trigger .label { display: flex; align-items: center; gap: 8px; }
+        .palette-trigger .swatches { display: flex; gap: 3px; height: 16px; border-radius: 3px; overflow: hidden; }
+        .palette-trigger .caret {
+            margin-left: 10px; width: 0; height: 0;
+            border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 6px solid #667eea;
         }
-
-        .palette-option:hover {
-            border-color: #667eea;
-            background: #f0f0f0;
+        .palette-menu {
+            position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #fff;
+            border: 2px solid #ddd; border-radius: 6px; box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+            max-height: 260px; overflow: auto; z-index: 20; display: none;
         }
-
-        .palette-option.active {
-            border-color: #667eea;
-            background: #667eea;
-            color: white;
-        }
-
-        .palette-preview {
-            display: flex;
-            gap: 3px;
-            margin-top: 8px;
-            height: 20px;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .palette-color {
-            flex: 1;
-        }
+        .palette-menu.open { display: block; }
+        .palette-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; cursor: pointer; transition: background 0.2s; }
+        .palette-item:hover { background: #f7f7f7; }
+        .palette-item.active { background: #eef0ff; }
+        .palette-item .name { font-weight: 600; color: #333; }
+        .palette-item .swatches { display: flex; gap: 3px; height: 14px; }
+        .swatch { width: 12px; height: 100%; border-radius: 2px; }
 
         /* notification styles removed */
 
@@ -271,21 +253,22 @@
         }
 
         @media (max-width: 768px) {
-            .content {
-                grid-template-columns: 1fr;
-            }
-
-            .header h1 {
-                font-size: 2em;
-            }
-
-            .button-group {
-                flex-direction: column;
-            }
-
-            button {
-                min-width: auto;
-            }
+            body { padding: 10px; }
+            .container { border-radius: 8px; }
+            .header { padding: 20px 15px; }
+            .header h1 { font-size: 1.8em; }
+            .header p { font-size: 1em; }
+            .content { grid-template-columns: 1fr; gap: 20px; padding: 15px; }
+            .button-group { flex-direction: column; gap: 8px; }
+            button { flex: none; width: 100%; min-width: 0; padding: 12px 16px; }
+            .preview-container { padding: 10px; }
+            canvas#outputCanvas { width: 100%; height: auto; max-width: 100%; }
+            .palette-trigger { padding: 10px; }
+            .palette-menu { max-height: 50vh; }
+            .crop-controls.active { grid-template-columns: 1fr; gap: 8px; }
+            .crop-dimension-input input { padding: 10px; font-size: 16px; }
+            .info-grid { grid-template-columns: 1fr; gap: 8px; }
+            input[type="range"], input[type="number"], select { font-size: 16px; }
         }
 
         .slider-container {
@@ -352,6 +335,11 @@
         .crop-resize-handle.se {
             bottom: -8px;
             right: -8px;
+        }
+        /* Larger touch target on mobile */
+        @media (max-width: 768px) {
+            .crop-resize-handle { width: 18px; height: 18px; }
+            .crop-resize-handle.se { bottom: -12px; right: -12px; }
         }
 
         .crop-mode-active {
@@ -421,7 +409,16 @@
 
                 <div class="control-group">
                     <label>Color Palette</label>
-                    <div class="palette-grid" id="paletteGrid"></div>
+                    <div class="palette-dropdown" id="paletteDropdown">
+                        <button type="button" class="palette-trigger" id="paletteTrigger">
+                            <span class="label">
+                                <span id="paletteTriggerName">Image Default</span>
+                                <span class="swatches" id="paletteTriggerSwatches"></span>
+                            </span>
+                            <span class="caret"></span>
+                        </button>
+                        <div class="palette-menu" id="paletteMenu"></div>
+                    </div>
                 </div>
 
                 <div class="control-group">
@@ -556,9 +553,28 @@
          "Greyscale": Array.from({length:16},(_,i)=>{ const v=Math.round(i*255/15); return [v,v,v]; }),
          "NES": [[0,0,0],[124,124,124],[0,0,252],[0,0,188],[68,40,188],[148,0,132],[168,0,32],[168,16,0],[136,20,0],[80,48,0],[0,120,0],[0,104,0],[0,88,0],[0,64,88],[0,0,0],[0,0,0]],
          "GameBoy": [[15,56,15],[48,98,48],[139,172,15],[155,188,15]],
+         "AmigaOCS": [[0,0,0],[255,255,255],[136,0,0],[0,170,170],[170,0,170],[0,204,85],[0,0,170],[238,238,119],[221,136,85],[102,68,0],[255,119,119],[51,51,51],[119,119,119],[170,255,102],[0,136,255],[187,187,187]],
          "C64": [[0,0,0],[255,255,255],[104,55,43],[112,164,178],[111,61,134],[88,141,67],[53,40,121],[184,199,111],[111,79,37],[67,57,0],[154,103,89],[68,68,68],[108,108,108],[154,154,154],[190,190,190],[255,255,255]],
          "PICO-8": [[0,0,0],[29,43,83],[126,37,83],[0,135,81],[171,82,54],[95,87,79],[194,195,199],[255,241,232],[255,0,77],[255,163,0],[255,236,39],[0,228,54],[41,173,255],[131,118,156],[255,119,168],[255,204,170]],
          "SNES": [[0,0,0],[34,34,136],[68,68,255],[0,102,153],[0,136,85],[0,170,51],[85,170,0],[170,170,51],[170,136,0],[170,68,0],[170,34,34],[170,68,85],[170,102,170],[136,102,136],[255,255,255],[204,204,204]],
+         "NeoGeo": [[0,0,0],[255,255,255],[64,64,64],[128,128,128],[192,192,192],[255,0,0],[0,255,0],[0,0,255],[255,255,0],[255,0,255],[0,255,255],[128,0,0],[0,128,0],[0,0,128],[128,128,0],[255,128,0]],
+         "Genesis": [
+                [0,0,0],
+                [34,34,34],
+                [68,68,68],
+                [102,102,102],
+                [136,136,136],
+                [170,170,170],
+                [204,204,204],
+                [255,255,255],
+                [136,0,0],
+                [255,0,0],
+                [0,136,0],
+                [0,255,0],
+                [0,0,136],
+                [0,0,255],
+                [136,0,136],
+                [255,0,255]],
          "Web Safe": (function(){
          const vals=[0,51,102,153,204,255], out=[]; for(const r of vals){ for(const g of vals){ for(const b of vals){ out.push([r,g,b]); } } } return out;
          })()
@@ -719,7 +735,11 @@
             scaleValue: document.getElementById('scaleValue'),
             outputResolution: document.getElementById('outputResolution'),
             placeholder: document.getElementById('placeholder'),
-            paletteGrid: document.getElementById('paletteGrid'),
+            paletteDropdown: document.getElementById('paletteDropdown'),
+            paletteTrigger: document.getElementById('paletteTrigger'),
+            paletteMenu: document.getElementById('paletteMenu'),
+            paletteTriggerName: document.getElementById('paletteTriggerName'),
+            paletteTriggerSwatches: document.getElementById('paletteTriggerSwatches'),
             infoGrid: document.getElementById('infoGrid'),
             imageDims: document.getElementById('imageDims'),
             paletteInfo: document.getElementById('paletteInfo'),
@@ -764,43 +784,84 @@
         // notifications removed
 
         function initPaletteGrid() {
-            elements.paletteGrid.innerHTML = '';
-            
-            // Add 'Image Default' option first (no color preview)
-            const defaultBtn = document.createElement('div');
-            defaultBtn.className = `palette-option ${currentPalette === 'Image Default' ? 'active' : ''}`;
-            defaultBtn.textContent = 'Image Default';
-            defaultBtn.addEventListener('click', () => selectPalette('Image Default'));
-            elements.paletteGrid.appendChild(defaultBtn);
-            
-            Object.keys(Pixelation.Common.Palettes).forEach(name => {
-                const palette = Pixelation.Common.Palettes[name];
-                const btn = document.createElement('div');
-                btn.className = `palette-option ${name === currentPalette ? 'active' : ''}`;
-                btn.textContent = name;
+            // Build dropdown menu items
+            elements.paletteMenu.innerHTML = '';
 
-                const preview = document.createElement('div');
-                preview.className = 'palette-preview';
+            function buildSwatches(container, palette) {
+                container.innerHTML = '';
+                if (!palette) return;
                 const step = Math.ceil(palette.length / 5);
                 for (let i = 0; i < palette.length; i += step) {
                     const [r, g, b] = palette[i];
-                    const color = document.createElement('div');
-                    color.className = 'palette-color';
-                    color.style.backgroundColor = `rgb(${r},${g},${b})`;
-                    preview.appendChild(color);
+                    const s = document.createElement('span');
+                    s.className = 'swatch';
+                    s.style.backgroundColor = `rgb(${r},${g},${b})`;
+                    container.appendChild(s);
                 }
+            }
 
-                btn.appendChild(preview);
-                btn.addEventListener('click', () => selectPalette(name));
-                elements.paletteGrid.appendChild(btn);
+            // Default item
+            const defaultItem = document.createElement('div');
+            defaultItem.className = `palette-item ${currentPalette === 'Image Default' ? 'active' : ''}`;
+            const defaultName = document.createElement('span');
+            defaultName.className = 'name';
+            defaultName.textContent = 'Image Default';
+            const defaultSwatches = document.createElement('span');
+            defaultSwatches.className = 'swatches';
+            defaultItem.appendChild(defaultName);
+            defaultItem.appendChild(defaultSwatches);
+            defaultItem.addEventListener('click', () => {
+                selectPalette('Image Default');
+                elements.paletteMenu.classList.remove('open');
             });
+            elements.paletteMenu.appendChild(defaultItem);
+
+            // Other palettes
+            Object.keys(Pixelation.Common.Palettes).forEach(name => {
+                const palette = Pixelation.Common.Palettes[name];
+                const item = document.createElement('div');
+                item.className = `palette-item ${name === currentPalette ? 'active' : ''}`;
+                const n = document.createElement('span');
+                n.className = 'name';
+                n.textContent = name;
+                const sw = document.createElement('span');
+                sw.className = 'swatches';
+                buildSwatches(sw, palette);
+                item.appendChild(n);
+                item.appendChild(sw);
+                item.addEventListener('click', () => {
+                    selectPalette(name);
+                    elements.paletteMenu.classList.remove('open');
+                });
+                elements.paletteMenu.appendChild(item);
+            });
+
+            // Trigger initial label/swatches
+            elements.paletteTriggerName.textContent = currentPalette;
+            const trigPalette = Pixelation.Common.Palettes[currentPalette];
+            buildSwatches(elements.paletteTriggerSwatches, trigPalette);
         }
 
         function selectPalette(name) {
             currentPalette = name;
-            document.querySelectorAll('.palette-option').forEach(el => {
-                el.classList.toggle('active', el.textContent === name);
+            // Update dropdown active states and trigger label
+            document.querySelectorAll('.palette-item').forEach(el => {
+                const nameEl = el.querySelector('.name');
+                el.classList.toggle('active', nameEl && nameEl.textContent === name);
             });
+            elements.paletteTriggerName.textContent = name;
+            const trigPalette = Pixelation.Common.Palettes[name];
+            elements.paletteTriggerSwatches.innerHTML = '';
+            if (trigPalette) {
+                const step = Math.ceil(trigPalette.length / 5);
+                for (let i = 0; i < trigPalette.length; i += step) {
+                    const [r,g,b] = trigPalette[i];
+                    const s = document.createElement('span');
+                    s.className = 'swatch';
+                    s.style.backgroundColor = `rgb(${r},${g},${b})`;
+                    elements.paletteTriggerSwatches.appendChild(s);
+                }
+            }
             
             // Auto-apply palette effect when selected
             if (!pixelation) return;
@@ -881,12 +942,27 @@
             // Restore image on canvas and await completion
             await restoreFromDataURLAsync(snapshot.imageData, true);
 
-            // Restore palette selection UI and label
+            // Restore palette selection UI and label (dropdown)
             currentPalette = snapshot.palette;
-            document.querySelectorAll('.palette-option').forEach(el => {
-                el.classList.toggle('active', el.textContent === currentPalette);
+            document.querySelectorAll('.palette-item').forEach(el => {
+                const nameEl = el.querySelector('.name');
+                el.classList.toggle('active', nameEl && nameEl.textContent === currentPalette);
             });
             elements.paletteInfo.textContent = currentPalette;
+            // Update dropdown trigger name and swatches
+            elements.paletteTriggerName.textContent = currentPalette;
+            elements.paletteTriggerSwatches.innerHTML = '';
+            const trigPalette = Pixelation.Common.Palettes[currentPalette];
+            if (trigPalette) {
+                const step = Math.ceil(trigPalette.length / 5);
+                for (let i = 0; i < trigPalette.length; i += step) {
+                    const [r,g,b] = trigPalette[i];
+                    const s = document.createElement('span');
+                    s.className = 'swatch';
+                    s.style.backgroundColor = `rgb(${r},${g},${b})`;
+                    elements.paletteTriggerSwatches.appendChild(s);
+                }
+            }
 
             // Sync Pixelation engine to restored state
             if (pixelation) {
@@ -1195,6 +1271,7 @@
         }
 
         // Crop overlay event handlers
+        // Mouse and touch handlers for crop overlay
         elements.cropOverlay.addEventListener('mousedown', (e) => {
             if (!cropMode) return;
 
@@ -1211,6 +1288,24 @@
                 cropState.originalCropY = cropState.y;
             }
         });
+
+        elements.cropOverlay.addEventListener('touchstart', (e) => {
+            if (!cropMode) return;
+            const t = e.touches[0];
+            const handle = e.target.closest('.crop-resize-handle');
+            if (handle) {
+                cropState.isResizing = true;
+                cropState.dragStartX = t.clientX;
+                cropState.dragStartY = t.clientY;
+            } else {
+                cropState.isDragging = true;
+                cropState.dragStartX = t.clientX;
+                cropState.dragStartY = t.clientY;
+                cropState.originalCropX = cropState.x;
+                cropState.originalCropY = cropState.y;
+            }
+            e.preventDefault();
+        }, { passive: false });
 
         document.addEventListener('mousemove', (e) => {
             if (!cropMode) return;
@@ -1285,7 +1380,58 @@
             }
         });
 
+        document.addEventListener('touchmove', (e) => {
+            if (!cropMode) return;
+            const t = e.touches[0];
+            const canvas = elements.outputCanvas;
+            const displayedWidth = canvas.offsetWidth;
+            const displayedHeight = canvas.offsetHeight;
+            const scaleX = canvas.width / displayedWidth;
+            const scaleY = canvas.height / displayedHeight;
+
+            const clientX = t.clientX;
+            const clientY = t.clientY;
+
+            if (cropState.isDragging) {
+                const deltaX = (clientX - cropState.dragStartX) * scaleX;
+                const deltaY = (clientY - cropState.dragStartY) * scaleY;
+                const maxX = Math.max(0, canvas.width - cropState.width);
+                const maxY = Math.max(0, canvas.height - cropState.height);
+                cropState.x = Math.max(0, Math.min(cropState.originalCropX + deltaX, maxX));
+                cropState.y = Math.max(0, Math.min(cropState.originalCropY + deltaY, maxY));
+                elements.cropX.value = Math.round(cropState.x);
+                elements.cropY.value = Math.round(cropState.y);
+                updateCropOverlay();
+            } else if (cropState.isResizing) {
+                const deltaX = (clientX - cropState.dragStartX) * scaleX;
+                const deltaY = (clientY - cropState.dragStartY) * scaleY;
+                const resizeDamping = 0.25;
+                if (cropState.lockToSquare) {
+                    const deltaSize = Math.max(deltaX, deltaY) * resizeDamping;
+                    const newSize = Math.max(10, Math.min(cropState.width + deltaSize, Math.min(canvas.width - cropState.x, canvas.height - cropState.y)));
+                    cropState.width = newSize;
+                    cropState.height = newSize;
+                    elements.cropWidth.value = Math.round(cropState.width);
+                    elements.cropHeight.value = Math.round(cropState.height);
+                } else {
+                    const newWidth = Math.max(10, Math.min(cropState.width + deltaX * resizeDamping, canvas.width - cropState.x));
+                    const newHeight = Math.max(10, Math.min(cropState.height + deltaY * resizeDamping, canvas.height - cropState.y));
+                    cropState.width = newWidth;
+                    cropState.height = newHeight;
+                    elements.cropWidth.value = Math.round(cropState.width);
+                    elements.cropHeight.value = Math.round(cropState.height);
+                }
+                updateCropOverlay();
+            }
+            e.preventDefault();
+        }, { passive: false });
+
         document.addEventListener('mouseup', () => {
+            cropState.isDragging = false;
+            cropState.isResizing = false;
+        });
+
+        document.addEventListener('touchend', () => {
             cropState.isDragging = false;
             cropState.isResizing = false;
         });
@@ -1400,10 +1546,13 @@
                     
                     // Set palette to Image Default when image loads
                     currentPalette = 'Image Default';
-                    document.querySelectorAll('.palette-option').forEach(el => {
-                        el.classList.toggle('active', el.textContent === 'Image Default');
+                    document.querySelectorAll('.palette-item').forEach(el => {
+                        const nameEl = el.querySelector('.name');
+                        el.classList.toggle('active', nameEl && nameEl.textContent === 'Image Default');
                     });
                     elements.paletteInfo.textContent = 'Image Default';
+                    elements.paletteTriggerName.textContent = 'Image Default';
+                    elements.paletteTriggerSwatches.innerHTML = '';
                     // notification removed
                     // Push initial state snapshot for reliable undo
                     pushHistory('init', {});
@@ -1535,7 +1684,29 @@
             // notification removed
         });
 
-        // Initialize palette grid on page load
+        // Wire dropdown interactions
+        elements.paletteTrigger.addEventListener('click', () => {
+            elements.paletteMenu.classList.toggle('open');
+        });
+
+        elements.paletteTrigger.addEventListener('touchstart', (e) => {
+            elements.paletteMenu.classList.toggle('open');
+            e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('click', (e) => {
+            if (!elements.paletteDropdown.contains(e.target)) {
+                elements.paletteMenu.classList.remove('open');
+            }
+        });
+
+        document.addEventListener('touchstart', (e) => {
+            if (!elements.paletteDropdown.contains(e.target)) {
+                elements.paletteMenu.classList.remove('open');
+            }
+        }, { passive: true });
+
+        // Initialize palette dropdown on page load
         initPaletteGrid();
     </script>
 </body>
