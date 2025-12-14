@@ -809,11 +809,12 @@
                 if (!currentImageData) return;
                 
                 if (name === 'Image Default') {
-                    // For Image Default, just update the label without applying palette effect
+                    // Revert to original-like palette label without reprocessing
                     elements.paletteInfo.textContent = 'Image Default';
+                    // Push history AFTER the UI change
+                    pushHistory('palette', { name });
                 } else {
-                    // Apply palette effect
-                    pushHistory();
+                    // Apply palette effect, then push history AFTER change
                     const img = new Image();
                     img.onload = () => {
                         elements.outputCanvas.width = img.width;
@@ -826,6 +827,8 @@
                         pixelation.setpalette(Pixelation.Common.Palettes[name]);
                         pixelation.convertpalette();
                         currentImageData = elements.outputCanvas.toDataURL();
+                        // Push history AFTER applying change
+                        pushHistory('palette', { name });
                         // Update preview display size after applying palette
                         setCanvasDisplaySize();
                         isCropped = currentImageData !== originalImageData;
@@ -842,9 +845,122 @@
         }
 
         // History and state helpers
-        function pushHistory() {
+        function snapshotToolState() {
+            return {
+                imageData: currentImageData,
+                palette: currentPalette,
+                pixelScale: parseInt(elements.pixelScale.value),
+                outputResolution: elements.outputResolution.value,
+                buttons: {
+                    downloadDisabled: !!elements.downloadBtn.disabled,
+                    cropToggleDisabled: !!elements.cropToggleBtn.disabled,
+                    undoDisabled: !!elements.undoBtn.disabled,
+                    revertDisabled: !!elements.revertBtn.disabled,
+                    resetDisabled: !!elements.resetBtn.disabled
+                },
+                visibility: {
+                    placeholder: elements.placeholder.style.display || '',
+                    outputCanvas: elements.outputCanvas.style.display || '',
+                    infoGrid: elements.infoGrid.style.display || ''
+                },
+                crop: {
+                    active: cropMode,
+                    ui: {
+                        controlsActive: elements.cropControls.classList.contains('active'),
+                        overlayActive: elements.cropOverlay.classList.contains('active'),
+                        toggleActive: elements.cropToggleBtn.classList.contains('active')
+                    },
+                    state: { ...cropState },
+                }
+            };
+        }
+
+        async function applyToolState(snapshot) {
+            if (!snapshot) return;
+
+            // Restore image on canvas and await completion
+            await restoreFromDataURLAsync(snapshot.imageData, true);
+
+            // Restore palette selection UI and label
+            currentPalette = snapshot.palette;
+            document.querySelectorAll('.palette-option').forEach(el => {
+                el.classList.toggle('active', el.textContent === currentPalette);
+            });
+            elements.paletteInfo.textContent = currentPalette;
+
+            // Sync Pixelation engine to restored state
+            if (pixelation) {
+                pixelation.setDrawTo(elements.outputCanvas);
+                if (Pixelation && Pixelation.Common && Pixelation.Common.Palettes[currentPalette]) {
+                    pixelation.setpalette(Pixelation.Common.Palettes[currentPalette]);
+                }
+            }
+
+            // Restore pixel scale
+            elements.pixelScale.value = String(snapshot.pixelScale || 1);
+            elements.scaleValue.textContent = String(snapshot.pixelScale || 1);
+
+            if (pixelation) {
+                pixelation.setScale(parseInt(elements.pixelScale.value));
+            }
+
+            // Restore output resolution control value (canvas size is already restored from imageData)
+            elements.outputResolution.value = snapshot.outputResolution || '';
+
+            // Restore crop tool mode and state
+            cropState = { ...snapshot.crop.state };
+            if (snapshot.crop.active) {
+                // Enable crop UI and apply state
+                cropMode = true;
+                elements.cropToggleBtn.textContent = 'Disable Crop Tool';
+                if (snapshot.crop.ui && snapshot.crop.ui.toggleActive) elements.cropToggleBtn.classList.add('active'); else elements.cropToggleBtn.classList.remove('active');
+                if (snapshot.crop.ui && snapshot.crop.ui.controlsActive) elements.cropControls.classList.add('active'); else elements.cropControls.classList.remove('active');
+                if (snapshot.crop.ui && snapshot.crop.ui.overlayActive) elements.cropOverlay.classList.add('active'); else elements.cropOverlay.classList.remove('active');
+
+                // Sync inputs
+                elements.cropWidth.value = Math.round(cropState.width);
+                elements.cropHeight.value = Math.round(cropState.height);
+                elements.cropX.value = Math.round(cropState.x);
+                elements.cropY.value = Math.round(cropState.y);
+                elements.cropLockSquare.value = cropState.lockToSquare ? 'square' : 'free';
+
+                updateCropOverlay();
+            } else {
+                // Ensure crop UI disabled
+                cropMode = false;
+                elements.cropToggleBtn.textContent = 'Enable Crop Tool';
+                elements.cropToggleBtn.classList.remove('active');
+                elements.cropControls.classList.remove('active');
+                elements.cropOverlay.classList.remove('active');
+            }
+
+            // Restore buttons enabled/disabled
+            if (snapshot.buttons) {
+                elements.downloadBtn.disabled = !!snapshot.buttons.downloadDisabled;
+                elements.cropToggleBtn.disabled = !!snapshot.buttons.cropToggleDisabled;
+                elements.undoBtn.disabled = !!snapshot.buttons.undoDisabled;
+                elements.revertBtn.disabled = !!snapshot.buttons.revertDisabled;
+                elements.resetBtn.disabled = !!snapshot.buttons.resetDisabled;
+            }
+
+            // Restore visibility flags
+            if (snapshot.visibility) {
+                elements.placeholder.style.display = snapshot.visibility.placeholder || '';
+                elements.outputCanvas.style.display = snapshot.visibility.outputCanvas || '';
+                elements.infoGrid.style.display = snapshot.visibility.infoGrid || '';
+            }
+
+            // Update undo/revert buttons based on history and original
+            elements.undoBtn.disabled = history.length === 0;
+            elements.revertBtn.disabled = (currentImageData === originalImageData);
+        }
+
+        function pushHistory(tool = 'unknown', meta = {}) {
             if (!currentImageData) return;
-            history.push(currentImageData);
+            const snapshot = snapshotToolState();
+            snapshot.tool = tool;
+            snapshot.meta = meta;
+            history.push(snapshot);
             if (history.length > 30) history.shift();
             elements.undoBtn.disabled = history.length === 0;
             elements.revertBtn.disabled = (currentImageData === originalImageData);
@@ -874,6 +990,33 @@
             img.src = dataURL;
         }
 
+        // Promise-based restore to coordinate UI state updates
+        function restoreFromDataURLAsync(dataURL, updateCurrent = true) {
+            return new Promise((resolve) => {
+                if (!dataURL) return resolve();
+                const img = new Image();
+                img.onload = () => {
+                    elements.outputCanvas.width = img.width;
+                    elements.outputCanvas.height = img.height;
+                    const ctx = elements.outputCanvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.clearRect(0,0,elements.outputCanvas.width, elements.outputCanvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    setCanvasDisplaySize();
+                    if (updateCurrent) {
+                        currentImageData = elements.outputCanvas.toDataURL();
+                        isCropped = currentImageData !== originalImageData;
+                        croppedImageData = isCropped ? currentImageData : null;
+                    }
+                    elements.imageDims.textContent = `${elements.outputCanvas.width}×${elements.outputCanvas.height}px`;
+                    elements.undoBtn.disabled = history.length === 0;
+                    elements.revertBtn.disabled = (currentImageData === originalImageData);
+                    resolve();
+                };
+                img.src = dataURL;
+            });
+        }
+
         // Set the canvas CSS display size to fit within the preview constraints (512x512)
         function setCanvasDisplaySize() {
             try {
@@ -890,13 +1033,14 @@
             }
         }
 
-        function undoLast() {
-            if (!history.length) return;
-            const prev = history.pop();
-            restoreFromDataURL(prev, true);
-            elements.undoBtn.disabled = history.length === 0;
-            elements.revertBtn.disabled = (currentImageData === originalImageData);
-            // notification removed
+        async function undoLast() {
+            // Need at least two snapshots to go back (current and previous)
+            if (history.length < 2) return;
+            // Remove current snapshot
+            history.pop();
+            // Apply previous snapshot (now at top)
+            const prev = history[history.length - 1];
+            await applyToolState(prev);
         }
 
         function revertOriginal() {
@@ -989,7 +1133,6 @@
             if (!pixelation) return;
 
             if (!currentImageData) return;
-            pushHistory();
 
             // Clamp values based on current canvas size
             const maxX = Math.max(0, elements.outputCanvas.width - cropState.width);
@@ -1039,6 +1182,8 @@
                 currentImageData = elements.outputCanvas.toDataURL();
                 croppedImageData = currentImageData;
                 elements.imageDims.textContent = `${cropState.width}×${cropState.height}px`;
+                // Push history AFTER applying change
+                pushHistory('crop', { width: cropState.width, height: cropState.height, x: cropState.x, y: cropState.y, lockToSquare: cropState.lockToSquare });
 
                 // Disable crop mode without restoring original
                 disableCropMode(false);
@@ -1260,6 +1405,8 @@
                     });
                     elements.paletteInfo.textContent = 'Image Default';
                     // notification removed
+                    // Push initial state snapshot for reliable undo
+                    pushHistory('init', {});
                 };
                 img.src = event.target.result;
             };
@@ -1271,7 +1418,6 @@
             elements.scaleValue.textContent = value;
             if (pixelation) {
                 if (!currentImageData) return;
-                pushHistory();
                 const img = new Image();
                 img.onload = () => {
                     elements.outputCanvas.width = img.width;
@@ -1284,6 +1430,8 @@
                     pixelation.setScale(parseInt(value));
                     pixelation.pixelate();
                     currentImageData = elements.outputCanvas.toDataURL();
+                    // Push history AFTER applying change
+                    pushHistory('pixelScale', { value });
                     // Update preview display size after pixelation
                     setCanvasDisplaySize();
                     isCropped = currentImageData !== originalImageData;
@@ -1303,7 +1451,6 @@
                 const [width, height] = value.split('x').map(Number);
                 
                 if (!currentImageData) return;
-                pushHistory();
                 const img = new Image();
                 img.onload = () => {
                     elements.outputCanvas.width = width;
@@ -1313,6 +1460,8 @@
                     ctx.clearRect(0,0,width,height);
                     ctx.drawImage(img, 0, 0, width, height);
                     currentImageData = elements.outputCanvas.toDataURL();
+                    // Push history AFTER applying change
+                    pushHistory('outputResolution', { value });
                     // Update preview display size to fit the new resolution
                     setCanvasDisplaySize();
                     isCropped = currentImageData !== originalImageData;
