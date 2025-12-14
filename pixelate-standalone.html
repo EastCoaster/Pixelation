@@ -439,6 +439,18 @@
                         <option value="32x32">32 × 32</option>
                         <option value="16x16">16 × 16</option>
                     </select>
+                    <div class="slider-container" style="margin-top:8px; align-items:center;">
+                        <input type="number" id="customWidth" min="1" placeholder="Width" style="max-width:120px;">
+                        <label style="display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="lockAspect" checked>
+                            <span style="display:inline-flex; align-items:center; gap:4px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 10V7a5 5 0 0 1 10 0v3" stroke="#667eea" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="5" y="10" width="14" height="9" rx="2" stroke="#667eea" stroke-width="2"/></svg>
+                                Keep Ratio
+                            </span>
+                        </label>
+                        <input type="number" id="customHeight" min="1" placeholder="Height" style="max-width:120px;">
+                        <button class="btn-secondary" id="applyCustomSizeBtn" style="min-width:0;">Apply Size</button>
+                    </div>
                 </div>
 
                 <div class="control-group">
@@ -743,6 +755,10 @@
             pixelScale: document.getElementById('pixelScale'),
             scaleValue: document.getElementById('scaleValue'),
             outputResolution: document.getElementById('outputResolution'),
+            customWidth: document.getElementById('customWidth'),
+            customHeight: document.getElementById('customHeight'),
+            lockAspect: document.getElementById('lockAspect'),
+            applyCustomSizeBtn: document.getElementById('applyCustomSizeBtn'),
             placeholder: document.getElementById('placeholder'),
             paletteDropdown: document.getElementById('paletteDropdown'),
             paletteTrigger: document.getElementById('paletteTrigger'),
@@ -921,6 +937,11 @@
                 palette: currentPalette,
                 pixelScale: parseInt(elements.pixelScale.value),
                 outputResolution: elements.outputResolution.value,
+                customSize: {
+                    width: elements.customWidth.value || '',
+                    height: elements.customHeight.value || '',
+                    lockAspect: !!elements.lockAspect.checked
+                },
                 buttons: {
                     downloadDisabled: !!elements.downloadBtn.disabled,
                     cropToggleDisabled: !!elements.cropToggleBtn.disabled,
@@ -991,6 +1012,13 @@
 
             // Restore output resolution control value (canvas size is already restored from imageData)
             elements.outputResolution.value = snapshot.outputResolution || '';
+
+            // Restore custom size UI state
+            if (snapshot.customSize) {
+                elements.customWidth.value = snapshot.customSize.width || '';
+                elements.customHeight.value = snapshot.customSize.height || '';
+                elements.lockAspect.checked = !!snapshot.customSize.lockAspect;
+            }
 
             // Restore crop tool mode and state
             cropState = { ...snapshot.crop.state };
@@ -1569,6 +1597,13 @@
                     elements.paletteInfo.textContent = 'Image Default';
                     elements.paletteTriggerName.textContent = 'Image Default';
                     elements.paletteTriggerSwatches.innerHTML = '';
+                    // Initialize custom size inputs to current image size
+                    if (elements.customWidth && elements.customHeight && elements.lockAspect) {
+                        elements.customWidth.value = String(img.naturalWidth);
+                        elements.customHeight.value = String(img.naturalHeight);
+                        elements.lockAspect.checked = true;
+                        elements.applyCustomSizeBtn.disabled = false;
+                    }
                     // notification removed
                     // Push initial state snapshot for reliable undo
                     pushHistory('init', {});
@@ -1637,7 +1672,113 @@
                     // notification removed
                 };
                 img.src = currentImageData;
+            } else {
+                // Auto (match input): set canvas to original image size
+                if (!originalImageData) return;
+                const img = new Image();
+                img.onload = () => {
+                    elements.outputCanvas.width = img.naturalWidth;
+                    elements.outputCanvas.height = img.naturalHeight;
+                    const ctx = elements.outputCanvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.clearRect(0,0,img.naturalWidth,img.naturalHeight);
+                    ctx.drawImage(img, 0, 0);
+                    currentImageData = elements.outputCanvas.toDataURL();
+                    pushHistory('outputResolution', { value: 'auto' });
+                    setCanvasDisplaySize();
+                    elements.imageDims.textContent = `${img.naturalWidth}×${img.naturalHeight}px`;
+                    elements.undoBtn.disabled = history.length === 0;
+                    elements.revertBtn.disabled = (currentImageData === originalImageData);
+                };
+                img.src = originalImageData;
             }
+        });
+
+        // Custom size handlers
+        function clampCustomSize(w, h, baseW, baseH) {
+            // Prevent upscaling above original image dimensions
+            const maxW = baseW;
+            const maxH = baseH;
+            return [Math.min(w, maxW), Math.min(h, maxH)];
+        }
+
+        // Update paired dimension when aspect is locked
+        function updateAspectFromWidth(newW) {
+            const baseW = elements.outputCanvas.width;
+            const baseH = elements.outputCanvas.height;
+            const ratio = baseH / baseW || 1;
+            const newH = Math.round(newW * ratio);
+            elements.customHeight.value = String(newH);
+        }
+
+        function updateAspectFromHeight(newH) {
+            const baseW = elements.outputCanvas.width;
+            const baseH = elements.outputCanvas.height;
+            const ratio = baseW / baseH || 1;
+            const newW = Math.round(newH * ratio);
+            elements.customWidth.value = String(newW);
+        }
+
+        elements.customWidth.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value) || 0;
+            if (elements.lockAspect.checked) {
+                updateAspectFromWidth(val);
+            }
+        });
+
+        elements.customHeight.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value) || 0;
+            if (elements.lockAspect.checked) {
+                updateAspectFromHeight(val);
+            }
+        });
+
+        elements.applyCustomSizeBtn.addEventListener('click', () => {
+            if (!pixelation) return;
+            // If inputs are empty, default to current canvas size
+            let targetW = parseInt(elements.customWidth.value);
+            let targetH = parseInt(elements.customHeight.value);
+            const baseW = elements.outputCanvas.width || 1;
+            const baseH = elements.outputCanvas.height || 1;
+            const ratioWtoH = baseH / baseW || 1;
+            const ratioHtoW = baseW / baseH || 1;
+
+            if (!targetW && !targetH) {
+                targetW = baseW;
+                targetH = baseH;
+            } else if (!targetW && targetH) {
+                // Derive width from height if aspect is locked
+                targetW = elements.lockAspect.checked ? Math.round(targetH * ratioHtoW) : baseW;
+            } else if (targetW && !targetH) {
+                // Derive height from width if aspect is locked
+                targetH = elements.lockAspect.checked ? Math.round(targetW * ratioWtoH) : baseH;
+            }
+
+            targetW = Math.max(1, targetW);
+            targetH = Math.max(1, targetH);
+            if (!currentImageData) return;
+            const baseImg = new Image();
+            baseImg.onload = () => {
+                // Clamp to original image dimensions to avoid upscaling
+                const [clampedW, clampedH] = clampCustomSize(targetW, targetH, baseImg.naturalWidth, baseImg.naturalHeight);
+                const img = new Image();
+                img.onload = () => {
+                    elements.outputCanvas.width = clampedW;
+                    elements.outputCanvas.height = clampedH;
+                    const ctx = elements.outputCanvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.clearRect(0,0,clampedW,clampedH);
+                    ctx.drawImage(img, 0, 0, clampedW, clampedH);
+                    currentImageData = elements.outputCanvas.toDataURL();
+                    pushHistory('outputResolutionCustom', { width: clampedW, height: clampedH });
+                    setCanvasDisplaySize();
+                    elements.imageDims.textContent = `${clampedW}×${clampedH}px`;
+                    elements.undoBtn.disabled = history.length === 0;
+                    elements.revertBtn.disabled = (currentImageData === originalImageData);
+                };
+                img.src = currentImageData;
+            };
+            baseImg.src = originalImageData || currentImageData;
         });
 
         elements.downloadBtn.addEventListener('click', () => {
