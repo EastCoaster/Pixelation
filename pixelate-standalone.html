@@ -15,18 +15,18 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 12px;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
         }
 
         .container {
             background: white;
             border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
             overflow: hidden;
-            max-width: 1200px;
+            max-width: 960px;
             width: 100%;
         }
 
@@ -49,9 +49,9 @@
 
         .content {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            padding: 30px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+            padding: 16px;
             align-items: start;
         }
 
@@ -253,16 +253,16 @@
         }
 
         @media (max-width: 600px) {
-            body { padding: 10px; }
+            body { padding: 8px; }
             .container { border-radius: 8px; }
-            .header { padding: 20px 15px; }
-            .header h1 { font-size: 1.8em; }
+            .header { padding: 18px 12px; }
+            .header h1 { font-size: 1.7em; }
             .header p { font-size: 1em; }
-            .content { grid-template-columns: 1fr; gap: 20px; padding: 15px; }
-            .button-group { flex-direction: column; gap: 8px; }
-            button { flex: none; width: 100%; min-width: 0; padding: 12px 16px; }
+            .content { grid-template-columns: 1fr; gap: 12px; padding: 10px; }
+            .button-group { flex-direction: column; gap: 8px; width: 100%; }
+            button { flex: none; width: 100%; min-width: 0; padding: 12px 14px; }
             .preview-container { padding: 10px; }
-            canvas#outputCanvas { width: 100%; height: auto; max-width: 100%; }
+            canvas#outputCanvas { width: 100%; height: auto; max-width: 100%; display: block; }
             .palette-trigger { padding: 10px; }
             .palette-menu { max-height: 50vh; }
             .crop-controls.active { grid-template-columns: 1fr; gap: 8px; }
@@ -544,7 +544,7 @@
         </div>
     </div>
 
-    <div class="version-footer">v1.1</div>
+    <div class="version-footer">v1.0.0</div>
 
     <!-- Pixelation API Script -->
     <script>
@@ -1133,10 +1133,14 @@
         // Set the canvas CSS display size to fit within the preview constraints (512x512)
         function setCanvasDisplaySize() {
             try {
-                const max = 512;
                 const w = elements.outputCanvas.width || 1;
                 const h = elements.outputCanvas.height || 1;
-                const scale = Math.min(max / w, max / h);
+                // Determine available width based on container and viewport to avoid overflow on mobile
+                const containerWidth = elements.previewContainer ? elements.previewContainer.clientWidth : 512;
+                const viewportWidth = window.innerWidth || 512;
+                // Leave a small gutter
+                const available = Math.max(120, Math.min(512, containerWidth - 12, viewportWidth - 24));
+                const scale = Math.min(available / w, available / h);
                 const displayW = Math.max(1, Math.round(w * scale));
                 const displayH = Math.max(1, Math.round(h * scale));
                 elements.outputCanvas.style.width = displayW + 'px';
@@ -1865,6 +1869,11 @@
 
         // Initialize palette dropdown on page load
         initPaletteGrid();
+
+        // Responsive: recompute canvas display size on resize
+        window.addEventListener('resize', () => {
+            setCanvasDisplaySize();
+        });
     </script>
 </body>
 </html>
